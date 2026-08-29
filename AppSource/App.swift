@@ -129,7 +129,7 @@ struct ContentView: View {
                     .padding(.bottom, 4)
             }
 
-            // 뻐기기 타이머 오버레이
+            // 뻐기기(타이머 대기) 오버레이 모달
             if isDelaying {
                 Color.black.opacity(0.7)
                     .edgesIgnoringSafeArea(.all)
@@ -158,6 +158,7 @@ struct ContentView: View {
                             Image(systemName: "hourglass")
                                 .font(.system(size: 24))
                                 .foregroundColor(.yellow)
+                            // 분:초 카운트다운 표시
                             Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
                                 .font(.system(size: 26, weight: .heavy, design: .rounded))
                                 .foregroundColor(.white)
@@ -165,11 +166,11 @@ struct ContentView: View {
                     }
 
                     VStack(spacing: 6) {
-                        Text("자동 뻐기는 중...")
+                        Text("뻐기는중입니다!")
                             .font(.system(size: 19, weight: .bold))
                             .foregroundColor(.white)
 
-                        Text("화면을 닫거나 나가면 실패할 수 있습니다.\n잠시만 대기해 주세요.")
+                        Text("앱을 닫으면 뻐기기에 실패하니\n앱을 열고있어주세요!")
                             .font(.system(size: 13))
                             .multilineTextAlignment(.center)
                             .foregroundColor(.white.opacity(0.8))
@@ -180,7 +181,6 @@ struct ContentView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 24)
                         .fill(Color(UIColor.darkGray).opacity(0.85))
-                        .background(Material.ultraThinMaterial)
                         .cornerRadius(24)
                 )
                 .overlay(
@@ -197,11 +197,12 @@ struct ContentView: View {
             }
             Button("✍️ 쓰기평가 (Writing)", role: .cancel) {}
         }
-        .alert("몇 분을 뻐길건지 설정하세요.", isPresented: $showDelayAlert) {
+        .alert("앱에서 몇분을 뻐길건지 설정하세요.", isPresented: $showDelayAlert) {
             TextField("설정 시간(분 단위)", value: $delayMinutes, format: .number)
             Button("시작") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
+                    // 1. 웹뷰 자바스크립트 동작 완료 후 -> 2. 뻐기기(타이머) 시작
                     vm.executeRoutine(target: target, answers: answers) {
                         startDelay(minutes: delayMinutes)
                     }
@@ -215,6 +216,7 @@ struct ContentView: View {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
+    // "(L4) 13514 22421" 같은 문자열에서 Target과 숫자 배열 추출
     private func parseAnswer(_ input: String) -> (String, [Int]) {
         var target = "L4"
         if let start = input.range(of: "(")?.upperBound, let end = input.range(of: ")")?.lowerBound {
@@ -227,7 +229,7 @@ struct ContentView: View {
     private func startDelay(minutes: Int) {
         remainingSeconds = minutes * 60
         withAnimation { isDelaying = true }
-        UIApplication.shared.isIdleTimerDisabled = true
+        UIApplication.shared.isIdleTimerDisabled = true // 화면 꺼짐 방지
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
@@ -237,7 +239,7 @@ struct ContentView: View {
                 timer?.invalidate()
                 withAnimation { isDelaying = false }
                 UIApplication.shared.isIdleTimerDisabled = false
-                showAlert("이제 저장해도 좋습니다.")
+                showAlert("이제 저장해도 좋습니다.") // 완료 메시지 변경
             }
         }
     }
@@ -245,7 +247,7 @@ struct ContentView: View {
     private func showAlert(_ msg: String) {
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first?.rootViewController else { return }
-        let alert = UIAlertController(title: "학습 완료", message: msg, preferredStyle: .alert)
+        let alert = UIAlertController(title: nil, message: msg, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "확인", style: .default))
         root.present(alert, animated: true)
     }
@@ -292,7 +294,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 
     override init() {
         let prefs = WKPreferences()
-        prefs.javaScriptCanOpenWindowsAutomatically = true // 팝업창 자동 열기 활성화
+        prefs.javaScriptCanOpenWindowsAutomatically = true
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
@@ -302,14 +304,13 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         self.webView = WKWebView(frame: .zero, configuration: config)
         super.init()
         self.webView.navigationDelegate = self
-        self.webView.uiDelegate = self // 팝업 가로채기 델리게이트 연결
+        self.webView.uiDelegate = self 
         
         if let url = URL(string: "https://ssdasa.exam4me.com") {
             self.webView.load(URLRequest(url: url))
         }
     }
 
-    // 1. window.open() 및 target="_blank" 팝업을 현재 창에서 직접 로드하도록 처리
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if navigationAction.targetFrame == nil {
             webView.load(navigationAction.request)
@@ -317,7 +318,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         return nil
     }
 
-    // 2. Alert 경고창 자동 지원
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first?.rootViewController else {
@@ -329,7 +329,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         root.present(alert, animated: true)
     }
 
-    // 3. Confirm 확인창 자동 지원
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first?.rootViewController else {
@@ -361,67 +360,66 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
+    // 요청하신 자바스크립트 실행 로직 완벽 적용
     func executeRoutine(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
-        let total = answers.count
 
         let script = """
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             
-            var rows = Array.from(document.querySelectorAll('tr, div, li'));
-            var targetRow = rows.find(r => r.innerText.includes('\(target)'));
-            if (targetRow) {
-                var btn = targetRow.querySelector('button, a, input[type="button"]');
-                if (btn) btn.click();
-            }
-            await sleep(1000);
-
             var clickTxt = (txt) => {
                 var el = Array.from(document.querySelectorAll('button, a, div, span, input[type="button"]'))
                               .find(e => e.innerText.trim() === txt || e.value === txt);
                 if (el) el.click();
             };
 
-            clickTxt('시작하기'); await sleep(800);
+            // 1. 초기 진입 버튼 클릭 시퀀스
             clickTxt('닫기'); await sleep(800);
             clickTxt('START'); await sleep(800);
+            clickTxt('학습시작'); await sleep(800);
             clickTxt('학습시작'); await sleep(1000);
 
             var answers = \(answersJSON);
-            var total = \(total);
+            var total = answers.length;
 
+            // 2. 답지 찍기 및 다음 문제 넘어가기
             for (var i = 0; i < total; i++) {
                 var ans = answers[i];
                 var opts = document.querySelectorAll('.answer-item, input[type="radio"], .num' + ans);
                 if (opts.length >= ans) { opts[ans - 1].click(); }
-                await sleep(400);
+                await sleep(500);
 
                 if (i < total - 1) {
                     if (typeof goStep0101_answer === 'function') goStep0101_answer();
                 } else {
                     if (typeof goStep0101_finish === 'function') goStep0101_finish();
                 }
-                await sleep(600);
+                await sleep(800);
             }
 
-            if (typeof goStep === 'function') goStep('info02'); await sleep(600);
-            if (typeof goStep === 'function') goStep('step0201'); await sleep(600);
+            // 3. 02 파트 진입
+            if (typeof goStep === 'function') goStep('info02'); await sleep(800);
+            if (typeof goStep === 'function') goStep('step0201'); await sleep(800);
 
+            // 4. 문제수 -1 만큼 next
             for (var k = 0; k < total - 1; k++) {
                 if (typeof goStep0201_step === 'function') goStep0201_step('next');
-                await sleep(400);
+                await sleep(500);
             }
 
-            if (typeof goStep === 'function') goStep('info03'); await sleep(600);
-            if (typeof goStep0301 === 'function') goStep0301(); await sleep(600);
+            // 5. 마무리 처리
+            if (typeof goStep === 'function') goStep('info03'); await sleep(800);
+            if (typeof goStep0301 === 'function') goStep0301(); await sleep(800);
             if (typeof goStep04 === 'function') goStep04('Y');
 
             return true;
         })();
         """
+        
         webView.evaluateJavaScript(script) { _, _ in
             DispatchQueue.main.async {
+                // 자바스크립트 자동화가 끝나면 UI 측에 완료를 알리고 타이머를 시작시킴
                 completion()
             }
         }
