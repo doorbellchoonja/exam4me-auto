@@ -22,14 +22,12 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // 배경 기본 톤
             Color(UIColor.systemGroupedBackground)
                 .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 0) {
-                // 상단 네비게이션 & 컨트롤 카드 (모던 라운드 플로팅 디자인)
+                // 상단 네비게이션 & 컨트롤 카드
                 VStack(spacing: 12) {
-                    // 상단 헤더 & 뒤로가기 & 새로고침
                     HStack {
                         HStack(spacing: 6) {
                             Circle()
@@ -67,7 +65,6 @@ struct ContentView: View {
                         }
                     }
 
-                    // 미수행 상태 배지 카드
                     HStack(spacing: 10) {
                         StatusBadge(
                             title: "Listening",
@@ -83,7 +80,6 @@ struct ContentView: View {
                         )
                     }
 
-                    // 답지 입력 필드 및 실행 버튼
                     HStack(spacing: 8) {
                         HStack {
                             Image(systemName: "doc.text.magnifyingglass")
@@ -133,7 +129,7 @@ struct ContentView: View {
                     .padding(.bottom, 4)
             }
 
-            // 뻐기기(타이머 대기) 글래스모피즘 오버레이 모달
+            // 뻐기기 타이머 오버레이
             if isDelaying {
                 Color.black.opacity(0.7)
                     .edgesIgnoringSafeArea(.all)
@@ -255,7 +251,6 @@ struct ContentView: View {
     }
 }
 
-// 상태 뱃지 컴포넌트
 struct StatusBadge: View {
     let title: String
     let count: Int
@@ -290,19 +285,61 @@ struct WebViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
-class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate {
+class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
     @Published var listeningCount: Int = 0
     @Published var vocabCount: Int = 0
     let webView: WKWebView
 
     override init() {
+        let prefs = WKPreferences()
+        prefs.javaScriptCanOpenWindowsAutomatically = true // 팝업창 자동 열기 활성화
+
         let config = WKWebViewConfiguration()
+        config.preferences = prefs
+        config.allowsInlineMediaPlayback = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+
         self.webView = WKWebView(frame: .zero, configuration: config)
         super.init()
         self.webView.navigationDelegate = self
+        self.webView.uiDelegate = self // 팝업 가로채기 델리게이트 연결
+        
         if let url = URL(string: "https://ssdasa.exam4me.com") {
             self.webView.load(URLRequest(url: url))
         }
+    }
+
+    // 1. window.open() 및 target="_blank" 팝업을 현재 창에서 직접 로드하도록 처리
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if navigationAction.targetFrame == nil {
+            webView.load(navigationAction.request)
+        }
+        return nil
+    }
+
+    // 2. Alert 경고창 자동 지원
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.windows.first?.rootViewController else {
+            completionHandler()
+            return
+        }
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler() }))
+        root.present(alert, animated: true)
+    }
+
+    // 3. Confirm 확인창 자동 지원
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.windows.first?.rootViewController else {
+            completionHandler(false)
+            return
+        }
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
+        alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
+        root.present(alert, animated: true)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
