@@ -1,0 +1,143 @@
+name: Build ExamAuto IPA & Deploy OTA
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: macos-14
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 직접 업로드된 인증서 파일 설치
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          security create-keychain -p "actions_pass" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
+
+          # Certificates/cert.p12 파일을 비밀번호 1로 임포트
+          security import Certificates/cert.p12 -k $KEYCHAIN_PATH -P "1" -T /usr/bin/codesign -A
+          security set-key-partition-list -S apple-tool:,apple: -s -k "actions_pass" $KEYCHAIN_PATH
+          security list-keychains -d user -s $KEYCHAIN_PATH
+
+          # Certificates/cert.mobileprovision 프로필 설치
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision
+
+      - name: Swiftc 컴파일 및 서명 패키징
+        run: |
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p ExamAuto.app
+
+          swiftc -target arm64-apple-ios15.0 -sdk $SDK_PATH \
+                 -framework SwiftUI -framework WebKit -framework UIKit \
+                 AppSource/App.swift -o ExamAuto.app/ExamAuto
+
+          cp AppSource/Info.plist ExamAuto.app/Info.plist
+
+          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision > profile.plist
+          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" profile.plist > entitlements.plist
+          cp ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision ExamAuto.app/embedded.mobileprovision
+
+          /usr/bin/codesign --force --sign "iPhone Distribution: Qingdao Rural Commercial Bank Co., Ltd" \
+                            --entitlements entitlements.plist \
+                            --timestamp=none \
+                            ExamAuto.app
+
+          mkdir -p Payload
+          cp -r ExamAuto.app Payload/
+          zip -qr ExamAuto.ipa Payload
+          rm -rf Payload
+
+      - name: OTA Manifest & 웹페이지 생성
+        env:
+          GH_OWNER: ${{ github.repository_owner }}
+          GH_REPO: ${{ github.event.repository.name }}
+        run: |
+          mkdir -p public
+          cp ExamAuto.ipa public/ExamAuto.ipa
+
+          BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
+
+          cat << EOF > public/manifest.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>items</key>
+              <array>
+                  <dict>
+                      <key>assets</key>
+                      <array>
+                          <dict>
+                              <key>kind</key>
+                              <string>software-package</string>
+                              <key>url</key>
+                              <string>${BASE_URL}/ExamAuto.ipa</string>
+                          </dict>
+                      </array>
+                      <key>metadata</key>
+                      <dict>
+                          <key>bundle-identifier</key>
+                          <string>com.SFn27a.5NDvCv</string>
+                          <key>bundle-version</key>
+                          <string>1.0.0</string>
+                          <key>kind</key>
+                          <string>software</string>
+                          <key>title</key>
+                          <string>ExamAuto</string>
+                      </dict>
+                  </dict>
+              </array>
+          </dict>
+          </plist>
+          EOF
+
+          cat << EOF > public/index.html
+          <!DOCTYPE html>
+          <html lang="ko">
+          <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>ExamAuto OTA 설치</title>
+              <style>
+                  body { font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f2f2f7; }
+                  .card { background: white; padding: 30px; border-radius: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: center; }
+                  .btn { display: inline-block; background-color: #007aff; color: white; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-size: 17px; font-weight: 600; margin-top: 20px; }
+              </style>
+          </head>
+          <body>
+              <div class="card">
+                  <h2>ExamAuto 앱 설치</h2>
+                  <p>Safari에서 아래 버튼을 클릭하여 다이렉트로 설치하세요.</p>
+                  <a class="btn" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">설치하기</a>
+              </div>
+          </body>
+          </html>
+          EOF
+
+      - name: GitHub Pages 아티팩트 업로드
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: GitHub Pages 배포
+        id: deployment
+        uses: actions/deploy-pages@v4
