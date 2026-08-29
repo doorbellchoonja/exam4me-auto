@@ -182,7 +182,6 @@ struct ContentView: View {
     @State private var showIdkAnswerAlert: Bool = false
     @State private var timer: Timer? = nil
     
-    // 유튜브 상태 관리 변수
     @State private var showYouTube: Bool = false
     @State private var isYouTubeMinimized: Bool = false
 
@@ -337,7 +336,6 @@ struct ContentView: View {
                     .padding(.bottom, 8)
             }
 
-            // 뻐기기(타이머 대기) & 유튜브 오버레이 로직
             if isDelaying {
                 Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.5)
                     .background(.ultraThinMaterial)
@@ -345,14 +343,12 @@ struct ContentView: View {
                     .transition(.opacity)
 
                 if showYouTube && !isYouTubeMinimized {
-                    // 전체화면 유튜브 모드
+                    // 전체화면 유튜브 모드 - Safe Area 존중 (상단 상태바 침범 방지)
                     ZStack {
                         YouTubeWebViewContainer(urlString: "https://www.youtube.com")
-                            .edgesIgnoringSafeArea(.all)
                         
                         VStack {
                             HStack {
-                                // 좌측 상단 실시간 타이머
                                 Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
@@ -364,7 +360,6 @@ struct ContentView: View {
                                 
                                 Spacer()
                                 
-                                // 우측 상단 최소화 버튼
                                 Button(action: {
                                     withAnimation { isYouTubeMinimized = true }
                                 }) {
@@ -376,14 +371,13 @@ struct ContentView: View {
                                 }
                             }
                             .padding(.horizontal, 16)
-                            .padding(.top, 16)
+                            .padding(.top, 8)
                             
                             Spacer()
                         }
                     }
                     .transition(.move(edge: .bottom))
                 } else {
-                    // 기본 뻐기기 화면 (또는 유튜브 최소화 상태)
                     VStack(spacing: 24) {
                         ZStack {
                             Circle()
@@ -425,7 +419,6 @@ struct ContentView: View {
                                 .lineSpacing(4)
                         }
                         
-                        // 유튜브 진입 / 열기 버튼
                         Button(action: {
                             withAnimation {
                                 showYouTube = true
@@ -531,7 +524,6 @@ struct ContentView: View {
     }
 }
 
-// 유튜브 전용 독립 웹뷰 래퍼
 struct YouTubeWebViewContainer: UIViewRepresentable {
     let urlString: String
     
