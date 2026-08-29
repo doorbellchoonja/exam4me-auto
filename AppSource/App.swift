@@ -4,16 +4,20 @@ import WebKit
 @main
 struct Exam4meApp: App {
     @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
+    @AppStorage("isDarkMode") private var isDarkMode = false // 다크모드 상태 저장
     @State private var isLoading = true
 
     var body: some Scene {
         WindowGroup {
             if !hasAgreedToTerms {
                 TermsView(hasAgreed: $hasAgreedToTerms)
+                    .preferredColorScheme(isDarkMode ? .dark : .light)
             } else if isLoading {
                 LoadingView(isLoading: $isLoading)
+                    .preferredColorScheme(isDarkMode ? .dark : .light)
             } else {
                 ContentView()
+                    .preferredColorScheme(isDarkMode ? .dark : .light)
             }
         }
     }
@@ -23,11 +27,11 @@ struct LiquidGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial)
-            .background(Color.white.opacity(0.15))
+            .background(Color.white.opacity(0.1))
             .cornerRadius(20)
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
             )
             .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
     }
@@ -40,24 +44,28 @@ extension View {
 }
 
 struct DynamicBackground: View {
+    @AppStorage("isDarkMode") private var isDarkMode = false
+    
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground).edgesIgnoringSafeArea(.all)
+            // 다크/라이트 모드에 따라 배경 톤 변경
+            Color(isDarkMode ? UIColor.systemBackground : UIColor.secondarySystemBackground)
+                .edgesIgnoringSafeArea(.all)
             
             Circle()
-                .fill(Color.blue.opacity(0.4))
+                .fill(Color.blue.opacity(isDarkMode ? 0.3 : 0.4))
                 .blur(radius: 80)
                 .frame(width: 300, height: 300)
                 .offset(x: -100, y: -200)
             
             Circle()
-                .fill(Color.purple.opacity(0.4))
+                .fill(Color.purple.opacity(isDarkMode ? 0.3 : 0.4))
                 .blur(radius: 80)
                 .frame(width: 300, height: 300)
                 .offset(x: 150, y: 200)
                 
             Circle()
-                .fill(Color.cyan.opacity(0.3))
+                .fill(Color.cyan.opacity(isDarkMode ? 0.2 : 0.3))
                 .blur(radius: 80)
                 .frame(width: 250, height: 250)
                 .offset(x: -50, y: 400)
@@ -75,7 +83,7 @@ struct LoadingView: View {
             VStack(spacing: 24) {
                 ProgressView()
                     .scaleEffect(1.8)
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .progressViewStyle(CircularProgressViewStyle(tint: .primary))
                 
                 Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -125,7 +133,7 @@ struct TermsView: View {
                         .padding(24)
                 }
                 .frame(maxWidth: .infinity)
-                .background(Color.white.opacity(0.1))
+                .background(Color.primary.opacity(0.05))
                 .cornerRadius(16)
                 .padding(.horizontal, 24)
                 
@@ -170,6 +178,88 @@ struct TermsView: View {
     }
 }
 
+// 모던한 가이드 화면 컴포넌트
+struct GuideView: View {
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        ZStack {
+            DynamicBackground()
+            
+            VStack(spacing: 20) {
+                HStack {
+                    Text("듣기 사용법")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    Spacer()
+                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundColor(.primary.opacity(0.6))
+                    }
+                }
+                .padding(.top, 24)
+                .padding(.horizontal, 20)
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        GuideStep(num: "1", title: "로그인", desc: "Exam4me 계정으로 로그인합니다.")
+                        
+                        GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이 화면이 뜨게 합니다.")
+                            // 사용자가 첨부한 가이드 이미지
+                            Image("image_6")
+                                .resizable()
+                                .scaledToFit()
+                                .cornerRadius(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                                .padding(.leading, 40)
+                        }
+                        
+                        GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 '시작' 버튼을 누릅니다.")
+                        
+                        GuideStep(num: "5", title: "완료", desc: "그 이후는 안내에 따라 하시면 됩니다.")
+                    }
+                    .padding(20)
+                    .liquidGlass()
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+    }
+}
+
+// 가이드 스텝 UI 컴포넌트
+struct GuideStep: View {
+    let num: String
+    let title: String
+    let desc: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Text(num)
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(.white)
+                .frame(width: 28, height: 28)
+                .background(Color.blue)
+                .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.primary)
+                Text(desc)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .lineSpacing(4)
+            }
+        }
+    }
+}
+
+
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
     @State private var answerInput: String = ""
@@ -179,6 +269,7 @@ struct ContentView: View {
     @State private var showDelayAlert: Bool = false
     @State private var showActionTypeDialog: Bool = false
     @State private var showSettings: Bool = false
+    @State private var showGuide: Bool = false
     @State private var showIdkAnswerAlert: Bool = false
     @State private var timer: Timer? = nil
     
@@ -205,6 +296,16 @@ struct ContentView: View {
                         Spacer()
 
                         HStack(spacing: 12) {
+                            // 가이드 뷰 버튼
+                            Button(action: { showGuide = true }) {
+                                Image(systemName: "questionmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .padding(10)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
+                            }
+                            
                             Button(action: { showSettings = true }) {
                                 Image(systemName: "gearshape.fill")
                                     .font(.system(size: 14, weight: .semibold))
@@ -269,9 +370,9 @@ struct ContentView: View {
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
-                            .background(Color.white.opacity(0.2))
+                            .background(Color.primary.opacity(0.05))
                             .cornerRadius(14)
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.3), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
 
                             Button(action: {
                                 hideKeyboard()
@@ -331,19 +432,18 @@ struct ContentView: View {
 
                 WebViewContainer(vm: vm)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
 
             if isDelaying {
-                Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.5)
+                Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.6)
                     .background(.ultraThinMaterial)
                     .edgesIgnoringSafeArea(.all)
                     .transition(.opacity)
 
                 if showYouTube && !isYouTubeMinimized {
-                    // 전체화면 유튜브 모드 - Safe Area 존중 (상단 상태바 침범 방지)
                     ZStack {
                         YouTubeWebViewContainer(urlString: "https://www.youtube.com")
                         
@@ -440,13 +540,19 @@ struct ContentView: View {
                         .padding(.top, 10)
                     }
                     .padding(40)
-                    .liquidGlass()
+                    .background(.ultraThinMaterial)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(24)
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
                     .padding(30)
                 }
             }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showGuide) {
+            GuideView()
         }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showActionTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기평가 (Listening)") {
@@ -551,6 +657,7 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
+    @AppStorage("isDarkMode") private var isDarkMode = false
     
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
 
@@ -574,6 +681,22 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
+                        
+                        // 다크 모드 토글 카드 추가
+                        VStack {
+                            Toggle(isOn: $isDarkMode) {
+                                HStack {
+                                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                                        .foregroundColor(isDarkMode ? .yellow : .orange)
+                                    Text(isDarkMode ? "다크 모드" : "라이트 모드")
+                                        .font(.system(size: 16, weight: .bold))
+                                }
+                            }
+                            .tint(.blue)
+                        }
+                        .padding(20)
+                        .liquidGlass()
+                        
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "info.circle.fill")
@@ -592,7 +715,7 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                             
-                            Divider().background(Color.white.opacity(0.2))
+                            Divider().background(Color.primary.opacity(0.1))
                             
                             Button(action: { shareApp() }) {
                                 HStack {
@@ -606,7 +729,7 @@ struct SettingsView: View {
                                 }
                             }
                             
-                            Divider().background(Color.white.opacity(0.2))
+                            Divider().background(Color.primary.opacity(0.1))
                             
                             Button(action: { showBugReportAlert = true }) {
                                 HStack {
@@ -741,9 +864,9 @@ struct StatusBadge: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(0.2))
+        .background(Color.primary.opacity(0.05))
         .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.3), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
     }
 }
 
