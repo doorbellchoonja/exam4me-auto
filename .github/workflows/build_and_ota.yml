@@ -18,57 +18,96 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: 직접 업로드된 인증서 파일 설치 (직접 추출 및 등록)
+      - name: Xcode 버전 선택
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: 직접 업로드된 인증서 파일 설치
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           security create-keychain -p "actions_pass" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
 
-          # 1. p12에서 인증서와 개인키를 각각 추출
+          # 1. p12 파일에서 인증서와 개인키 분리 추출 후 키체인에 등록
           openssl pkcs12 -in Certificates/cert.p12 -clcerts -nokeys -passin pass:"1" -out $RUNNER_TEMP/cert.cer
           openssl pkcs12 -in Certificates/cert.p12 -nocerts -nodes -passin pass:"1" -out $RUNNER_TEMP/key.pem
 
-          # 2. 인증서와 키를 각각 키체인에 등록
           security import $RUNNER_TEMP/cert.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
           security import $RUNNER_TEMP/key.pem -k $KEYCHAIN_PATH -T /usr/bin/codesign
 
-          # 3. 키체인 접근 권한 및 검색 목록 설정
           security set-key-partition-list -S apple-tool:,apple: -s -k "actions_pass" $KEYCHAIN_PATH
           security list-keychains -d user -s $KEYCHAIN_PATH
 
-          # 4. 임시 키 파일 삭제
           rm -f $RUNNER_TEMP/cert.cer $RUNNER_TEMP/key.pem
 
-          # 5. 모바일 프로비저닝 프로필 설치
+          # 2. 모바일 프로비저닝 프로필 설치
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision
 
-      - name: Swiftc 컴파일 및 서명 패키징
+      - name: 표준 Xcode 프로젝트 생성 및 IPA 아카이브/빌드
         run: |
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          mkdir -p ExamAuto.app
+          # 1. xcodegen 설치
+          brew install xcodegen
 
-          # -parse-as-library 옵션을 추가하여 @main 인식 허용
-          swiftc -parse-as-library -target arm64-apple-ios15.0 -sdk $SDK_PATH \
-                 -framework SwiftUI -framework WebKit -framework UIKit \
-                 AppSource/App.swift -o ExamAuto.app/ExamAuto
+          # 2. project.yml 생성 (표준 Xcode 프로젝트 정의)
+          cat << 'EOF' > project.yml
+          name: ExamAuto
+          options:
+            bundleIdPrefix: com.SFn27a
+            deploymentTarget:
+              iOS: "15.0"
+          targets:
+            ExamAuto:
+              type: application
+              platform: iOS
+              sources: [AppSource]
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.SFn27a.5NDvCv
+                  INFOPLIST_FILE: AppSource/Info.plist
+                  CODE_SIGN_STYLE: Manual
+                  CODE_SIGN_IDENTITY: "iPhone Distribution: Qingdao Rural Commercial Bank Co., Ltd"
+                  PROVISIONING_PROFILE_SPECIFIER: "2a94d76b-fdf3-4426-abf8-ca8bbb9ba331"
+                  DEVELOPMENT_TEAM: N3WP93Z7CM
+                  TARGETED_DEVICE_FAMILY: "1,2"
+          EOF
 
-          cp AppSource/Info.plist ExamAuto.app/Info.plist
+          # 3. Xcode 프로젝트 파일 생성
+          xcodegen generate
 
-          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision > profile.plist
-          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" profile.plist > entitlements.plist
-          cp ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision ExamAuto.app/embedded.mobileprovision
+          # 4. xcodebuild 아카이브 빌드
+          xcodebuild clean archive \
+            -project ExamAuto.xcodeproj \
+            -scheme ExamAuto \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $PWD/build/ExamAuto.xcarchive
 
-          /usr/bin/codesign --force --sign "iPhone Distribution: Qingdao Rural Commercial Bank Co., Ltd" \
-                            --entitlements entitlements.plist \
-                            --timestamp=none \
-                            ExamAuto.app
+          # 5. Enterprise ExportOptions.plist 생성 및 IPA 추출
+          cat << 'EOF' > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>enterprise</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>teamID</key>
+              <string>N3WP93Z7CM</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.SFn27a.5NDvCv</key>
+                  <string>2a94d76b-fdf3-4426-abf8-ca8bbb9ba331</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
 
-          mkdir -p Payload
-          cp -r ExamAuto.app Payload/
-          zip -qr ExamAuto.ipa Payload
-          rm -rf Payload
+          xcodebuild -exportArchive \
+            -archivePath $PWD/build/ExamAuto.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $PWD/output
 
       - name: OTA Manifest & 웹페이지 생성
         env:
@@ -76,7 +115,7 @@ jobs:
           GH_REPO: ${{ github.event.repository.name }}
         run: |
           mkdir -p public
-          cp ExamAuto.ipa public/ExamAuto.ipa
+          cp output/ExamAuto.ipa public/ExamAuto.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
 
