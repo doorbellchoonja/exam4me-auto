@@ -31,7 +31,6 @@ jobs:
         run: |
           mkdir -p $RUNNER_TEMP/certs_out
 
-          # 저장소 내 p12 및 mobileprovision 파일 자동 탐색
           P12_SRC=$(find . -maxdepth 3 -name "*.p12" | head -n 1)
           PROV_SRC=$(find . -maxdepth 3 -name "*.mobileprovision" | head -n 1)
 
@@ -40,33 +39,30 @@ jobs:
             exit 1
           fi
 
-          echo "Found P12: $P12_SRC"
-          echo "Found Provisioning Profile: $PROV_SRC"
-
           mkdir -p certs
           cp "$P12_SRC" certs/cert.p12
           cp "$PROV_SRC" certs/profile.mobileprovision
 
-          # 비밀번호 1로 인증서 및 키 추출
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem
+          # p12 추출
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem
 
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem
 
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
           security create-keychain -p "actions" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
 
-          cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
-          openssl pkcs12 -export -in $RUNNER_TEMP/combined.pem -out $RUNNER_TEMP/rebuilt.p12 -passout pass:actions
+          cat $RUNNER_TEMP/certs_out/cert.pem $RUNNER_TEMP/certs_out/key.pem > $RUNNER_TEMP/certs_out/combined.pem
+          openssl pkcs12 -export -in $RUNNER_TEMP/certs_out/combined.pem -out $RUNNER_TEMP/certs_out/rebuilt.p12 -passout pass:actions
           
-          security import $RUNNER_TEMP/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security import $RUNNER_TEMP/certs_out/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-      - name: Build Secure Obfuscated iOS Binary
+      - name: Build Secure iOS Binary
         run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           
@@ -89,32 +85,60 @@ jobs:
 
           strip -r -u ExamAuto
 
-      - name: Package Unsigned and Signed IPA
+      - name: Package Unsigned and Signed IPA (Fixed Bundle Structure)
         run: |
-          # 1. 공통 앱 번들 생성
           mkdir -p Payload/ExamAuto.app
+          
+          # 1. 실행 바이너리 배치
           cp ExamAuto Payload/ExamAuto.app/ExamAuto
           
+          # 2. 필수 번들 식별자 PkgInfo 생성 (누락 시 앱 미실행 원인)
+          echo -n "APPL????" > Payload/ExamAuto.app/PkgInfo
+
+          # 3. Info.plist 보정 및 iOS 표준 키 주입
           PLIST_SRC=$(find . -maxdepth 3 -name "Info.plist" | head -n 1)
           if [ -n "$PLIST_SRC" ]; then
             cp "$PLIST_SRC" Payload/ExamAuto.app/Info.plist
+          else
+            cat << 'EOF' > Payload/ExamAuto.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleIdentifier</key>
+              <string>com.worksin.one</string>
+              <key>CFBundleName</key>
+              <string>ExamAuto</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleExecutable</key>
+              <string>ExamAuto</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
           fi
 
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+          # iOS 앱 실행에 필요한 핵심 키 강제 보정
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ExamAuto" Payload/ExamAuto.app/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string ExamAuto" Payload/ExamAuto.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" Payload/ExamAuto.app/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $APP_VERSION" Payload/ExamAuto.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" Payload/ExamAuto.app/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUM" Payload/ExamAuto.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string iPhoneOS" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
 
-          ICON_SRC=$(find . -maxdepth 3 -name "*Icon*.png" | head -n 1)
-          if [ -n "$ICON_SRC" ]; then
-            sips -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@2x.png 2>/dev/null || true
-            sips -z 180 180 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@3x.png 2>/dev/null || true
-            sips -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60.png 2>/dev/null || true
+          # 4. Swift 표준 라이브러리 dylib 프레임워크 번들링
+          mkdir -p Payload/ExamAuto.app/Frameworks
+          SWIFT_LIB_DIR="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
+          if [ -d "$SWIFT_LIB_DIR" ]; then
+            cp "$SWIFT_LIB_DIR"/*.dylib Payload/ExamAuto.app/Frameworks/ 2>/dev/null || true
           fi
 
-          # 2. 서명되지 않은 Unsigned IPA 패키징 (TrollStore / Sideloadly / 개인인증서 서명용)
+          # 5. 서명되지 않은 순수 Unsigned IPA 생성
           mkdir -p output
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
 
-          # 3. 기업용 프로파일 주입 및 Codesign 서명 진행
+          # 6. 프로비저닝 프로파일 주입 및 Codesign 서명
           cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
 
           security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
@@ -123,9 +147,14 @@ jobs:
           CERT_ID=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
           echo "Signing with: $CERT_ID"
 
+          # 내부 dylib 서명 후 메인 번들 서명
+          if [ -d "Payload/ExamAuto.app/Frameworks" ]; then
+            find Payload/ExamAuto.app/Frameworks -type f -name "*.dylib" -exec codesign --force --sign "$CERT_ID" --timestamp=none {} \; 2>/dev/null || true
+          fi
+
           codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements.plist --timestamp=none Payload/ExamAuto.app
           
-          # 4. 서명 완료된 Signed IPA 패키징
+          # 7. 서명 완료된 Signed IPA 패키징
           zip -qr "output/ExamAuto-signed.ipa" Payload
 
       - name: Publish IPAs to GitHub Releases
@@ -157,7 +186,6 @@ jobs:
             BUNDLE_ID="com.worksin.one"
           fi
 
-          # OTA 57px, 512px 필수 아이콘 생성
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 --decode > public/icon57.png
           cp public/icon57.png public/icon512.png
 
@@ -217,22 +245,21 @@ jobs:
           <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>ExamAuto 다운로드 및 설치</title>
+              <title>ExamAuto 다운로드</title>
               <style>
                   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f2f2f7; }
                   .card { background: white; padding: 32px 24px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); text-align: center; width: 310px; }
                   h2 { margin: 0 0 6px 0; font-size: 22px; color: #1c1c1e; }
                   p { margin: 0 0 20px 0; color: #8e8e93; font-size: 13px; }
-                  .btn { display: block; text-decoration: none; border-radius: 12px; font-size: 15px; font-weight: 600; padding: 14px 0; margin-bottom: 12px; transition: opacity 0.2s; }
+                  .btn { display: block; text-decoration: none; border-radius: 12px; font-size: 15px; font-weight: 600; padding: 14px 0; margin-bottom: 12px; }
                   .btn-primary { background-color: #007aff; color: white; box-shadow: 0 4px 10px rgba(0,122,255,0.25); }
                   .btn-secondary { background-color: #e5e5ea; color: #1c1c1e; }
-                  .btn:active { opacity: 0.7; }
               </style>
           </head>
           <body>
               <div class="card">
                   <h2>ExamAuto</h2>
-                  <p>v${APP_VERSION} 빌드 설치</p>
+                  <p>v${APP_VERSION} 빌드</p>
                   <a class="btn btn-primary" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">OTA 다이렉트 설치</a>
                   <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto.ipa" download>서명된 IPA 다운로드</a>
                   <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto-unsigned.ipa" download>순수 Unsigned IPA 다운로드</a>
