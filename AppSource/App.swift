@@ -128,6 +128,7 @@ struct ContentView: View {
                             .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
                         }
                         
+                        // 뻐기기(시간 채우기) 전용 버튼
                         Button(action: {
                             hideKeyboard()
                             showDelayAlert = true
@@ -224,20 +225,8 @@ struct ContentView: View {
             Button("🎧 듣기평가 (Listening)") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
-                    vm.executeRoutine(target: target, answers: answers) {
-                        // 1. 페이지 새로고침
-                        vm.webView.reload()
-                        // 2. 3초 뒤 로딩 완료라 가정하고 나머지 JS 실행 후 팝업 띄우기
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            let postReloadScript = """
-                            if (typeof goNext === 'function') goNext();
-                            if (typeof goNextInfo === 'function') goNextInfo();
-                            """
-                            vm.webView.evaluateJavaScript(postReloadScript, completionHandler: nil)
-                            
-                            showAlert("지금부터 학습시작 버튼 옆의 시계모양 시간 채우기 버튼을 눌러서 시간을 채울수 있습니다.")
-                        }
-                    }
+                    // 이제 뻐기기 호출 없이 자동화 JS만 단독 실행
+                    vm.executeRoutine(target: target, answers: answers) {}
                 }
             }
             Button("✍️ 쓰기평가 (Writing)", role: .cancel) {}
@@ -296,7 +285,7 @@ struct ContentView: View {
     }
 }
 
-// 심플하고 모던한 카드형 설정 화면
+// 심플한 카드형 설정 화면
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
@@ -305,7 +294,6 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            // 커스텀 네비게이션 헤더
             HStack {
                 Text("설정")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -320,7 +308,6 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             
             VStack(spacing: 16) {
-                // 앱 버전 카드
                 VStack {
                     HStack {
                         Text("앱 버전")
@@ -335,7 +322,6 @@ struct SettingsView: View {
                 .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(16)
                 
-                // 후원 카드
                 VStack(alignment: .leading, spacing: 16) {
                     Text("개발자 후원")
                         .font(.system(size: 13, weight: .bold))
@@ -559,7 +545,15 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 
             if (typeof goStep === 'function') goStep('info03'); await sleep(800);
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(800);
-            if (typeof goStep04 === 'function') goStep04('Y');
+            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(800);
+
+            // 마지막 부분 이어붙인 코드
+            location.reload();
+            await sleep(2000); // 새로고침 후 렌더링 대기
+            if (typeof goNext === 'function') goNext(); await sleep(800);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(800);
+            
+            alert('지금부터 학습시작 버튼 옆의 시계모양 시간 채우기 버튼을 눌러서 시간을 채울수 있습니다.');
 
             return true;
         })();
