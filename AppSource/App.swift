@@ -4,7 +4,7 @@ import WebKit
 @main
 struct Exam4meApp: App {
     @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
-    @AppStorage("isDarkMode") private var isDarkMode = false // 다크모드 상태 저장
+    @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var isLoading = true
 
     var body: some Scene {
@@ -48,7 +48,6 @@ struct DynamicBackground: View {
     
     var body: some View {
         ZStack {
-            // 다크/라이트 모드에 따라 배경 톤 변경
             Color(isDarkMode ? UIColor.systemBackground : UIColor.secondarySystemBackground)
                 .edgesIgnoringSafeArea(.all)
             
@@ -65,7 +64,7 @@ struct DynamicBackground: View {
                 .offset(x: 150, y: 200)
                 
             Circle()
-                .fill(Color.cyan.opacity(isDarkMode ? 0.2 : 0.3))
+                .fill(Color.cyan.opacity(0.2 : 0.3))
                 .blur(radius: 80)
                 .frame(width: 250, height: 250)
                 .offset(x: -50, y: 400)
@@ -178,7 +177,7 @@ struct TermsView: View {
     }
 }
 
-// 모던한 가이드 화면 컴포넌트
+// 웹 링크 기반 이미지를 보여주는 가이드 화면
 struct GuideView: View {
     @Environment(\.presentationMode) var presentationMode
     
@@ -207,19 +206,34 @@ struct GuideView: View {
                         GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이 화면이 뜨게 합니다.")
-                            // 사용자가 첨부한 가이드 이미지
-                            Image("image_6")
-                                .resizable()
-                                .scaledToFit()
-                                .cornerRadius(12)
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-                                .padding(.leading, 40)
+                            GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨게 합니다.")
+                            
+                            // 제공된 웹 링크 이미지 로드
+                            AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity, minHeight: 180)
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFit()
+                                        .cornerRadius(12)
+                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                                case .failure(_):
+                                    Text("이미지를 불러올 수 없습니다.")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                            .padding(.leading, 40)
                         }
                         
-                        GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 '시작' 버튼을 누릅니다.")
+                        GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작 버튼을 누릅니다.")
                         
-                        GuideStep(num: "5", title: "완료", desc: "그 이후는 안내에 따라 하시면 됩니다.")
+                        GuideStep(num: "5", title: "완료", desc: "그이후는 안내에따라 하시면 됩니다.")
                     }
                     .padding(20)
                     .liquidGlass()
@@ -231,7 +245,6 @@ struct GuideView: View {
     }
 }
 
-// 가이드 스텝 UI 컴포넌트
 struct GuideStep: View {
     let num: String
     let title: String
@@ -258,7 +271,6 @@ struct GuideStep: View {
         }
     }
 }
-
 
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
@@ -296,7 +308,6 @@ struct ContentView: View {
                         Spacer()
 
                         HStack(spacing: 12) {
-                            // 가이드 뷰 버튼
                             Button(action: { showGuide = true }) {
                                 Image(systemName: "questionmark.circle.fill")
                                     .font(.system(size: 14, weight: .semibold))
@@ -657,6 +668,7 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
+    @State private var showUpdateAlert = false
     @AppStorage("isDarkMode") private var isDarkMode = false
     
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
@@ -682,7 +694,6 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
-                        // 다크 모드 토글 카드 추가
                         VStack {
                             Toggle(isOn: $isDarkMode) {
                                 HStack {
@@ -713,6 +724,21 @@ struct SettingsView: View {
                                 Text(appVersion)
                                     .font(.system(size: 15, weight: .bold))
                                     .foregroundColor(.secondary)
+                            }
+                            
+                            Divider().background(Color.primary.opacity(0.1))
+                            
+                            // 업데이트 체크 버튼 추가
+                            Button(action: { showUpdateAlert = true }) {
+                                HStack {
+                                    Text("업데이트 체크")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             
                             Divider().background(Color.primary.opacity(0.1))
@@ -817,6 +843,16 @@ struct SettingsView: View {
             Button("확인", role: .cancel) {}
         } message: {
             Text("제작자한테 디엠하세요.")
+        }
+        // 업데이트 체크 알림창 및 사파리 이동 연동
+        .alert("업데이트 체크", isPresented: $showUpdateAlert) {
+            Button("확인") {
+                if let url = URL(string: "https://doorbellchoonja.github.io/exam4me-auto") {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("이 알림을 닫으면 앱 설치 화면이 나옵니다. 사이트에 적혀져있는 앱 버전이 깔려있는 앱 버전보다 높으면 설치했던거처럼 업데이트 하면됨 아 그리고 한번 설치해뒀으니까 신뢰 그거 안눌러도 되고 앱 지우면 다시 설치과정 해야하니까 귀찮으면 지우지마셈 아 그리고 자동업데이트는 귀찮아서 안만든거 맞음 ㅇㅇ")
         }
     }
     
