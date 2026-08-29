@@ -1,4 +1,4 @@
-name: Build Signed IPA & Deploy OTA
+name: Build Signed & Unsigned IPA, Deploy OTA
 
 on:
   workflow_dispatch:
@@ -31,29 +31,51 @@ jobs:
         run: |
           mkdir -p $RUNNER_TEMP/certs_out
 
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem
+          # 저장소 내 p12 및 mobileprovision 파일 자동 탐색
+          P12_SRC=$(find . -maxdepth 3 -name "*.p12" | head -n 1)
+          PROV_SRC=$(find . -maxdepth 3 -name "*.mobileprovision" | head -n 1)
 
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem
+          if [ -z "$P12_SRC" ] || [ -z "$PROV_SRC" ]; then
+            echo "::error::인증서(.p12) 또는 프로비저닝 프로필(.mobileprovision) 파일을 찾을 수 없습니다."
+            exit 1
+          fi
+
+          echo "Found P12: $P12_SRC"
+          echo "Found Provisioning Profile: $PROV_SRC"
+
+          mkdir -p certs
+          cp "$P12_SRC" certs/cert.p12
+          cp "$PROV_SRC" certs/profile.mobileprovision
+
+          # 비밀번호 1로 인증서 및 키 추출
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem
+
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem
 
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
           security create-keychain -p "actions" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
 
-          cat $RUNNER_TEMP/certs_out/cert.pem $RUNNER_TEMP/certs_out/key.pem > $RUNNER_TEMP/certs_out/combined.pem
-          openssl pkcs12 -export -in $RUNNER_TEMP/certs_out/combined.pem -out $RUNNER_TEMP/certs_out/rebuilt.p12 -passout pass:actions
+          cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
+          openssl pkcs12 -export -in $RUNNER_TEMP/combined.pem -out $RUNNER_TEMP/rebuilt.p12 -passout pass:actions
           
-          security import $RUNNER_TEMP/certs_out/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security import $RUNNER_TEMP/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-      # [보안 빌드] 최적화 컴파일 및 심볼 스트립 적용
       - name: Build Secure Obfuscated iOS Binary
         run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           
+          SWIFT_SRC=$(find . -maxdepth 3 -name "App.swift" -o -name "main.swift" | head -n 1)
+          if [ -z "$SWIFT_SRC" ]; then
+            SWIFT_SRC=$(find . -maxdepth 3 -name "*.swift" | head -n 1)
+          fi
+          echo "Found Swift source: $SWIFT_SRC"
+
           swiftc -target arm64-apple-ios15.0 \
                  -sdk "$SDK_PATH" \
                  -framework SwiftUI \
@@ -62,21 +84,38 @@ jobs:
                  -O \
                  -whole-module-optimization \
                  -parse-as-library \
-                 Sources/App.swift \
+                 "$SWIFT_SRC" \
                  -o ExamAuto
 
           strip -r -u ExamAuto
 
-      - name: Package and Sign IPA
+      - name: Package Unsigned and Signed IPA
         run: |
+          # 1. 공통 앱 번들 생성
           mkdir -p Payload/ExamAuto.app
-          
           cp ExamAuto Payload/ExamAuto.app/ExamAuto
-          cp Sources/Info.plist Payload/ExamAuto.app/Info.plist
-          cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
           
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" Payload/ExamAuto.app/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" Payload/ExamAuto.app/Info.plist
+          PLIST_SRC=$(find . -maxdepth 3 -name "Info.plist" | head -n 1)
+          if [ -n "$PLIST_SRC" ]; then
+            cp "$PLIST_SRC" Payload/ExamAuto.app/Info.plist
+          fi
+
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+
+          ICON_SRC=$(find . -maxdepth 3 -name "*Icon*.png" | head -n 1)
+          if [ -n "$ICON_SRC" ]; then
+            sips -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@2x.png 2>/dev/null || true
+            sips -z 180 180 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@3x.png 2>/dev/null || true
+            sips -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60.png 2>/dev/null || true
+          fi
+
+          # 2. 서명되지 않은 Unsigned IPA 패키징 (TrollStore / Sideloadly / 개인인증서 서명용)
+          mkdir -p output
+          zip -qr "output/ExamAuto-unsigned.ipa" Payload
+
+          # 3. 기업용 프로파일 주입 및 Codesign 서명 진행
+          cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
 
           security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
           /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision.plist > $RUNNER_TEMP/entitlements.plist
@@ -86,33 +125,39 @@ jobs:
 
           codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements.plist --timestamp=none Payload/ExamAuto.app
           
-          IPA_FILENAME="ExamAuto.ipa"
-          zip -qr "$IPA_FILENAME" Payload
-          echo "IPA_FILENAME=${IPA_FILENAME}" >> $GITHUB_ENV
+          # 4. 서명 완료된 Signed IPA 패키징
+          zip -qr "output/ExamAuto-signed.ipa" Payload
 
-      - name: Publish Pure IPA to GitHub Releases
+      - name: Publish IPAs to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.APP_VERSION }}"
           name: "ExamAuto v${{ env.APP_VERSION }}"
-          files: ${{ env.IPA_FILENAME }}
+          files: |
+            output/ExamAuto-signed.ipa
+            output/ExamAuto-unsigned.ipa
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # OTA 웹페이지 & Manifest 자동 생성
       - name: Setup OTA Manifest & Pages Web
         env:
           GH_OWNER: ${{ github.repository_owner }}
           GH_REPO: ${{ github.event.repository.name }}
         run: |
           mkdir -p public
-          cp ExamAuto.ipa public/ExamAuto.ipa
+          cp output/ExamAuto-signed.ipa public/ExamAuto.ipa
+          cp output/ExamAuto-unsigned.ipa public/ExamAuto-unsigned.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
 
-          # OTA 57px, 512px 필수 더미 아이콘 생성
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" $RUNNER_TEMP/provision.plist | sed 's/^[^.]*\.//')
+          if [ -z "$BUNDLE_ID" ]; then
+            BUNDLE_ID="com.worksin.one"
+          fi
+
+          # OTA 57px, 512px 필수 아이콘 생성
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 --decode > public/icon57.png
           cp public/icon57.png public/icon512.png
 
@@ -152,7 +197,7 @@ jobs:
                       <key>metadata</key>
                       <dict>
                           <key>bundle-identifier</key>
-                          <string>com.worksin.one</string>
+                          <string>${BUNDLE_ID}</string>
                           <key>bundle-version</key>
                           <string>${APP_VERSION}</string>
                           <key>kind</key>
@@ -172,18 +217,25 @@ jobs:
           <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>ExamAuto OTA 설치</title>
+              <title>ExamAuto 다운로드 및 설치</title>
               <style>
-                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f2f2f7; }
-                  .card { background: white; padding: 32px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); text-align: center; max-width: 85%; width: 320px; }
-                  .btn { display: block; background-color: #007aff; color: white; padding: 15px 0; text-decoration: none; border-radius: 14px; font-size: 17px; font-weight: 600; margin-top: 24px; box-shadow: 0 4px 10px rgba(0,122,255,0.3); }
+                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f2f2f7; }
+                  .card { background: white; padding: 32px 24px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); text-align: center; width: 310px; }
+                  h2 { margin: 0 0 6px 0; font-size: 22px; color: #1c1c1e; }
+                  p { margin: 0 0 20px 0; color: #8e8e93; font-size: 13px; }
+                  .btn { display: block; text-decoration: none; border-radius: 12px; font-size: 15px; font-weight: 600; padding: 14px 0; margin-bottom: 12px; transition: opacity 0.2s; }
+                  .btn-primary { background-color: #007aff; color: white; box-shadow: 0 4px 10px rgba(0,122,255,0.25); }
+                  .btn-secondary { background-color: #e5e5ea; color: #1c1c1e; }
+                  .btn:active { opacity: 0.7; }
               </style>
           </head>
           <body>
               <div class="card">
-                  <h2 style="margin:0 0 8px 0; color:#1c1c1e;">ExamAuto</h2>
-                  <p style="margin:0; color:#8e8e93; font-size:14px;">Safari에서 아래 버튼을 눌러 설치하세요.</p>
-                  <a class="btn" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">설치하기</a>
+                  <h2>ExamAuto</h2>
+                  <p>v${APP_VERSION} 빌드 설치</p>
+                  <a class="btn btn-primary" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">OTA 다이렉트 설치</a>
+                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto.ipa" download>서명된 IPA 다운로드</a>
+                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto-unsigned.ipa" download>순수 Unsigned IPA 다운로드</a>
               </div>
           </body>
           </html>
