@@ -25,7 +25,7 @@ jobs:
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
 
-          # 1. p12 파일에서 인증서와 개인키 분리 추출 후 키체인에 등록
+          # 1. p12 파일에서 인증서와 키 추출 및 키체인 등록
           openssl pkcs12 -in Certificates/cert.p12 -clcerts -nokeys -passin pass:"1" -out $RUNNER_TEMP/cert.cer
           openssl pkcs12 -in Certificates/cert.p12 -nocerts -nodes -passin pass:"1" -out $RUNNER_TEMP/key.pem
 
@@ -39,75 +39,38 @@ jobs:
 
           # 2. 모바일 프로비저닝 프로필 설치
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision
+          cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision
 
-      - name: 표준 Xcode 프로젝트 생성 및 IPA 아카이브/빌드
+      - name: 앱 번들 조립 및 정식 코드서명
         run: |
-          # 1. Xcode 15 호환 XcodeGen 2.42.0 직접 다운로드 및 설치
-          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip -o xcodegen.zip
-          unzip -q xcodegen.zip -d xcodegen_bin
-          sudo cp xcodegen_bin/bin/xcodegen /usr/local/bin/xcodegen
-          rm -rf xcodegen.zip xcodegen_bin
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p ExamAuto.app
 
-          # 2. project.yml 생성
-          cat << 'EOF' > project.yml
-          name: ExamAuto
-          options:
-            bundleIdPrefix: com.SFn27a
-            deploymentTarget:
-              iOS: "15.0"
-          targets:
-            ExamAuto:
-              type: application
-              platform: iOS
-              sources: [AppSource]
-              settings:
-                base:
-                  PRODUCT_BUNDLE_IDENTIFIER: com.SFn27a.5NDvCv
-                  INFOPLIST_FILE: AppSource/Info.plist
-                  CODE_SIGN_STYLE: Manual
-                  CODE_SIGN_IDENTITY: "iPhone Distribution: Qingdao Rural Commercial Bank Co., Ltd"
-                  PROVISIONING_PROFILE_SPECIFIER: "2a94d76b-fdf3-4426-abf8-ca8bbb9ba331"
-                  DEVELOPMENT_TEAM: N3WP93Z7CM
-                  TARGETED_DEVICE_FAMILY: "1,2"
-          EOF
+          # 1. Swift 앱 바이너리 컴파일
+          swiftc -parse-as-library -target arm64-apple-ios15.0 -sdk $SDK_PATH \
+                 -framework SwiftUI -framework WebKit -framework UIKit \
+                 AppSource/App.swift -o ExamAuto.app/ExamAuto
 
-          # 3. Xcode 프로젝트 파일 생성
-          xcodegen generate
+          # 2. 필수 앱 번들 메타데이터 생성
+          cp AppSource/Info.plist ExamAuto.app/Info.plist
+          echo -n "APPL????" > ExamAuto.app/PkgInfo
 
-          # 4. xcodebuild 아카이브 빌드
-          xcodebuild clean archive \
-            -project ExamAuto.xcodeproj \
-            -scheme ExamAuto \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath $PWD/build/ExamAuto.xcarchive
+          # 3. Entitlements 추출 및 프로비저닝 임베드
+          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision > profile.plist
+          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" profile.plist > entitlements.plist
+          cp ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision ExamAuto.app/embedded.mobileprovision
 
-          # 5. Enterprise ExportOptions.plist 생성 및 IPA 추출
-          cat << 'EOF' > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>enterprise</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>teamID</key>
-              <string>N3WP93Z7CM</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.SFn27a.5NDvCv</key>
-                  <string>2a94d76b-fdf3-4426-abf8-ca8bbb9ba331</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          # 4. 새 Jiangsu Simcere 인증서로 코드서명
+          /usr/bin/codesign --force --sign "iPhone Distribution: Jiangsu Simcere Pharmaceutical Co.,Ltd" \
+                            --entitlements entitlements.plist \
+                            --timestamp=none \
+                            ExamAuto.app
 
-          xcodebuild -exportArchive \
-            -archivePath $PWD/build/ExamAuto.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath $PWD/output
+          # 5. IPA 패키징
+          mkdir -p Payload
+          cp -r ExamAuto.app Payload/
+          zip -qr ExamAuto.ipa Payload
+          rm -rf Payload
 
       - name: OTA Manifest & 웹페이지 생성
         env:
@@ -115,7 +78,7 @@ jobs:
           GH_REPO: ${{ github.event.repository.name }}
         run: |
           mkdir -p public
-          cp output/ExamAuto.ipa public/ExamAuto.ipa
+          cp ExamAuto.ipa public/ExamAuto.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
 
@@ -139,7 +102,7 @@ jobs:
                       <key>metadata</key>
                       <dict>
                           <key>bundle-identifier</key>
-                          <string>com.SFn27a.5NDvCv</string>
+                          <string>com.worksin.one</string>
                           <key>bundle-version</key>
                           <string>1.0.0</string>
                           <key>kind</key>
