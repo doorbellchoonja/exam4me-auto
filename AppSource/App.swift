@@ -19,7 +19,6 @@ struct Exam4meApp: App {
     }
 }
 
-// 공통 리퀴드 글래스 모디파이어
 struct LiquidGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -40,7 +39,6 @@ extension View {
     }
 }
 
-// 화려한 백그라운드 (글래스 효과 극대화)
 struct DynamicBackground: View {
     var body: some View {
         ZStack {
@@ -67,7 +65,6 @@ struct DynamicBackground: View {
     }
 }
 
-// 1. 화려해진 초기 로딩 (스플래시) 화면
 struct LoadingView: View {
     @Binding var isLoading: Bool
 
@@ -99,7 +96,6 @@ struct LoadingView: View {
     }
 }
 
-// 2. 최초 실행 시 이용약관 동의 화면
 struct TermsView: View {
     @Binding var hasAgreed: Bool
 
@@ -174,10 +170,9 @@ struct TermsView: View {
     }
 }
 
-// 3. 메인 콘텐츠 뷰
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
-    @State private var answerInput: String = "" // 예시 답안 제거
+    @State private var answerInput: String = ""
     @State private var delayMinutes: Int = 10
     @State private var remainingSeconds: Int = 0
     @State private var isDelaying: Bool = false
@@ -192,7 +187,6 @@ struct ContentView: View {
             DynamicBackground()
 
             VStack(spacing: 0) {
-                // 상단 네비게이션 & 컨트롤 카드 (리퀴드 글래스)
                 VStack(spacing: 16) {
                     HStack {
                         HStack(spacing: 6) {
@@ -312,7 +306,6 @@ struct ContentView: View {
                             }
                         }
                         
-                        // 답지를 모르겠나요 버튼
                         HStack {
                             Button(action: {
                                 showIdkAnswerAlert = true
@@ -333,7 +326,6 @@ struct ContentView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 12)
 
-                // 웹뷰 컨테이너
                 WebViewContainer(vm: vm)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.3), lineWidth: 1))
@@ -341,7 +333,6 @@ struct ContentView: View {
                     .padding(.bottom, 8)
             }
 
-            // 뻐기기(타이머 대기) 오버레이 모달
             if isDelaying {
                 Color.black.opacity(0.5)
                     .background(.ultraThinMaterial)
@@ -404,7 +395,6 @@ struct ContentView: View {
                     vm.executeRoutine(target: target, answers: answers) {}
                 }
             }
-            // 쓰기평가 제거됨
             Button("취소", role: .cancel) {}
         }
         .alert("앱에서 몇분을 뻐길건지 설정하세요.", isPresented: $showDelayAlert) {
@@ -466,7 +456,6 @@ struct ContentView: View {
     }
 }
 
-// 심플하고 모던한 글래스모피즘 설정 화면
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
@@ -494,7 +483,7 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // 앱 정보 카드
+                        // 앱 정보 및 공유/버그 카드
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "info.circle.fill")
@@ -515,6 +504,20 @@ struct SettingsView: View {
                             
                             Divider().background(Color.white.opacity(0.2))
                             
+                            Button(action: { shareApp() }) {
+                                HStack {
+                                    Text("앱 공유하기")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Divider().background(Color.white.opacity(0.2))
+                            
                             Button(action: { showBugReportAlert = true }) {
                                 HStack {
                                     Text("앱 버그 및 신고")
@@ -530,7 +533,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
-                        // 업데이트 예정 이력
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "sparkles")
@@ -546,7 +548,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
-                        // 후원 카드
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "heart.fill")
@@ -605,9 +606,29 @@ struct SettingsView: View {
             Text("제작자한테 디엠하세요.")
         }
     }
+    
+    // 공유 시트 호출 함수
+    private func shareApp() {
+        let repoURL = "https://doorbellchoonja.github.io/exam4me-auto"
+        guard let url = URL(string: repoURL) else { return }
+        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = windowScene.windows.first?.rootViewController {
+            var topController = root
+            while let presented = topController.presentedViewController {
+                topController = presented
+            }
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = topController.view
+                popover.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+            topController.present(activityVC, animated: true)
+        }
+    }
 }
 
-// 상태 뱃지 (리퀴드)
 struct StatusBadge: View {
     let title: String
     let count: Int
