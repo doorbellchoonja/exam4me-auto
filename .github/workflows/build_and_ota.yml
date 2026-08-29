@@ -98,18 +98,18 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string iPhoneOS" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
 
-          # 아이콘 리사이징
+          # 아이콘 리사이징 및 강제 PNG 포맷 변환
           ICON_SRC=$(find . -maxdepth 3 -name "*Icon*.png" -o -name "image*.png" | head -n 1)
           if [ -n "$ICON_SRC" ]; then
             echo "Processing App Icon from $ICON_SRC"
-            sips -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@2x.png 2>/dev/null || true
-            sips -z 180 180 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@3x.png 2>/dev/null || true
-            sips -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60.png 2>/dev/null || true
+            sips -s format png -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@2x.png 2>/dev/null || true
+            sips -s format png -z 180 180 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60@3x.png 2>/dev/null || true
+            sips -s format png -z 120 120 "$ICON_SRC" --out Payload/ExamAuto.app/AppIcon60x60.png 2>/dev/null || true
             mkdir -p public_icons
-            sips -z 57 57 "$ICON_SRC" --out public_icons/icon57.png 2>/dev/null || true
-            sips -z 512 512 "$ICON_SRC" --out public_icons/icon512.png 2>/dev/null || true
+            sips -s format png -z 57 57 "$ICON_SRC" --out public_icons/icon57.png 2>/dev/null || true
+            sips -s format png -z 512 512 "$ICON_SRC" --out public_icons/icon512.png 2>/dev/null || true
             
-            # Info.plist에 아이콘 참조 명시적 주입 (핵심 수정 사항)
+            # Info.plist에 아이콘 참조 명시적 주입
             /usr/libexec/PlistBuddy -c "Add :CFBundleIcons dict" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
             /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon dict" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
             /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
@@ -239,9 +239,9 @@ jobs:
                   <img src="icon512.png" alt="App Icon" class="app-icon" />
                   <h2>ExamAuto</h2>
                   <p>v${APP_VERSION} 빌드</p>
-                  <a class="btn btn-primary" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">자동화 프로그램 설치</a>
-                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto.ipa" download>여기는 점검중인 항목입니다.</a>
-                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto-unsigned.ipa" download>여기는 점검중인 항목입니다.</a>
+                  <a class="btn btn-primary" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">OTA 다이렉트 설치</a>
+                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto.ipa" download>서명된 IPA 다운로드</a>
+                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto-unsigned.ipa" download>순수 Unsigned IPA 다운로드</a>
               </div>
           </body>
           </html>
