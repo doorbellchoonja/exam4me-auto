@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Xcode 버전 선택
-        run: sudo xcode-select -switch /Applications/Xcode_15.4.app/Contents/Developer
+        run: sudo xcode-select -switch /Applications/Xcode_16.0.app
 
       - name: 직접 업로드된 인증서 파일 설치
         run: |
