@@ -3,13 +3,119 @@ import WebKit
 
 @main
 struct ExamAutoApp: App {
+    @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
+    @State private var isLoading = true
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if !hasAgreedToTerms {
+                TermsView(hasAgreed: $hasAgreedToTerms)
+            } else if isLoading {
+                LoadingView(isLoading: $isLoading)
+            } else {
+                ContentView()
+            }
         }
     }
 }
 
+// 1. 초기 로딩 (스플래시) 화면
+struct LoadingView: View {
+    @Binding var isLoading: Bool
+
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemBackground).edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 24) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                
+                Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.primary)
+            }
+        }
+        .onAppear {
+            // 5초 ~ 10초 사이 랜덤 딜레이
+            let randomTime = Double.random(in: 5.0...10.0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + randomTime) {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    isLoading = false
+                }
+            }
+        }
+    }
+}
+
+// 2. 최초 실행 시 이용약관 동의 화면
+struct TermsView: View {
+    @Binding var hasAgreed: Bool
+
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemGroupedBackground).edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 30) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+                
+                VStack(spacing: 12) {
+                    Text("이용약관 동의")
+                        .font(.system(size: 22, weight: .bold))
+                    
+                    Text("앱을 사용하기 전 아래 약관에 동의해야 합니다.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack {
+                    Text("저는 이 앱으로 인해 나중에 들키거나 그때 이 앱 제작자에게 책임을 물지 않겠습니다.")
+                        .font(.system(size: 15, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(6)
+                        .padding(20)
+                }
+                .frame(maxWidth: .infinity)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(16)
+                .padding(.horizontal, 24)
+                
+                VStack(spacing: 12) {
+                    Button(action: {
+                        withAnimation { hasAgreed = true }
+                    }) {
+                        Text("동의합니다")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.blue)
+                            .cornerRadius(14)
+                    }
+                    
+                    Button(action: {
+                        // 동의 거부 시 앱 강제 종료
+                        exit(0)
+                    }) {
+                        Text("동의하지 않습니다 (앱 종료)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(14)
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+}
+
+// 3. 메인 콘텐츠 뷰
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
     @State private var answerInput: String = "(L4) 13514 22421 43554 42152"
@@ -225,7 +331,6 @@ struct ContentView: View {
             Button("🎧 듣기평가 (Listening)") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
-                    // 이제 뻐기기 호출 없이 자동화 JS만 단독 실행
                     vm.executeRoutine(target: target, answers: answers) {}
                 }
             }
@@ -547,9 +652,8 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(800);
             if (typeof goStep04 === 'function') goStep04('Y'); await sleep(800);
 
-            // 마지막 부분 이어붙인 코드
             location.reload();
-            await sleep(2000); // 새로고침 후 렌더링 대기
+            await sleep(2000); 
             if (typeof goNext === 'function') goNext(); await sleep(800);
             if (typeof goNextInfo === 'function') goNextInfo(); await sleep(800);
             
