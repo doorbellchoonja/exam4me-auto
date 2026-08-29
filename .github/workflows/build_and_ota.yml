@@ -18,19 +18,26 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: 직접 업로드된 인증서 파일 설치
+      - name: 직접 업로드된 인증서 파일 설치 (호환성 패치 적용)
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           security create-keychain -p "actions_pass" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
 
-          # Certificates/cert.p12 파일을 비밀번호 1로 임포트
-          security import Certificates/cert.p12 -k $KEYCHAIN_PATH -P "1" -T /usr/bin/codesign -A
+          # 1. OpenSSL을 통해 p12를 레거시 호환 형식으로 자동 재패키징
+          openssl pkcs12 -in Certificates/cert.p12 -nodes -passin pass:"1" -out $RUNNER_TEMP/temp.pem
+          openssl pkcs12 -export -legacy -in $RUNNER_TEMP/temp.pem -passout pass:"1" -out $RUNNER_TEMP/legacy_cert.p12
+
+          # 2. 호환성 변환된 p12를 키체인에 등록
+          security import $RUNNER_TEMP/legacy_cert.p12 -k $KEYCHAIN_PATH -P "1" -T /usr/bin/codesign -A
           security set-key-partition-list -S apple-tool:,apple: -s -k "actions_pass" $KEYCHAIN_PATH
           security list-keychains -d user -s $KEYCHAIN_PATH
 
-          # Certificates/cert.mobileprovision 프로필 설치
+          # 3. 임시 파일 정리
+          rm -f $RUNNER_TEMP/temp.pem $RUNNER_TEMP/legacy_cert.p12
+
+          # 4. 모바일 프로비저닝 프로필 설치
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision
 
