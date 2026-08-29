@@ -18,9 +18,6 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: Xcode 버전 선택
-        run: sudo xcode-select -switch /Applications/Xcode_16.0.app
-
       - name: 직접 업로드된 인증서 파일 설치
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
@@ -49,11 +46,12 @@ jobs:
           # 1. xcodegen 설치
           brew install xcodegen
 
-          # 2. project.yml 생성 (표준 Xcode 프로젝트 정의)
+          # 2. project.yml 생성 (Xcode 15 호환 포맷 지정)
           cat << 'EOF' > project.yml
           name: ExamAuto
           options:
             bundleIdPrefix: com.SFn27a
+            xcodeVersion: "15.4"
             deploymentTarget:
               iOS: "15.0"
           targets:
