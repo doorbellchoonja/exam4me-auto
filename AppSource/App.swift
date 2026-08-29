@@ -125,17 +125,39 @@ struct DynamicBackground: View {
     }
 }
 
+// 사용자가 제공한 loading.json 벡터 데이터 기반 커스텀 로딩 뷰
 struct LoadingView: View {
     @Binding var isLoading: Bool
+    @State private var isRotating = false
+    @State private var trimEnd: CGFloat = 0.1
 
     var body: some View {
         ZStack {
             DynamicBackground()
             
-            VStack(spacing: 24) {
-                ProgressView()
-                    .scaleEffect(1.8)
-                    .progressViewStyle(CircularProgressViewStyle(tint: .primary))
+            VStack(spacing: 28) {
+                // 커스텀 다중 링 벡터 로딩 애니메이션 (loading.json 싱크)
+                ZStack {
+                    Circle()
+                        .trim(from: 0, to: trimEnd)
+                        .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .frame(width: 90, height: 90)
+                        .rotationEffect(.degrees(isRotating ? 360 : 0))
+                        .animation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false), value: isRotating)
+                    
+                    Circle()
+                        .trim(from: 0, to: 0.6)
+                        .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.4), style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 65, height: 65)
+                        .rotationEffect(.degrees(isRotating ? -360 : 0))
+                        .animation(Animation.linear(duration: 2.0).repeatForever(autoreverses: false), value: isRotating)
+                }
+                .onAppear {
+                    isRotating = true
+                    withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                        trimEnd = 0.75
+                    }
+                }
                 
                 Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
