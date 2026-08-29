@@ -30,7 +30,6 @@ jobs:
       - name: Extract Certificate and Key
         run: |
           mkdir -p $RUNNER_TEMP/certs_out
-
           P12_SRC=$(find . -maxdepth 3 -name "*.p12" | head -n 1)
           PROV_SRC=$(find . -maxdepth 3 -name "*.mobileprovision" | head -n 1)
 
@@ -64,7 +63,6 @@ jobs:
       - name: Build Secure iOS Binary
         run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          
           SWIFT_SRC=$(find . -maxdepth 3 -name "App.swift" -o -name "main.swift" | head -n 1)
           if [ -z "$SWIFT_SRC" ]; then
             SWIFT_SRC=$(find . -maxdepth 3 -name "*.swift" | head -n 1)
@@ -100,7 +98,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string iPhoneOS" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
 
-          # 앱 아이콘 크기별 리사이징 및 번들 삽입
+          # 아이콘 리사이징
           ICON_SRC=$(find . -maxdepth 3 -name "*Icon*.png" -o -name "image*.png" | head -n 1)
           if [ -n "$ICON_SRC" ]; then
             echo "Processing App Icon from $ICON_SRC"
@@ -110,13 +108,17 @@ jobs:
             mkdir -p public_icons
             sips -z 57 57 "$ICON_SRC" --out public_icons/icon57.png 2>/dev/null || true
             sips -z 512 512 "$ICON_SRC" --out public_icons/icon512.png 2>/dev/null || true
+            
+            # Info.plist에 아이콘 참조 명시적 주입 (핵심 수정 사항)
+            /usr/libexec/PlistBuddy -c "Add :CFBundleIcons dict" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon dict" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon60x60" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
           fi
 
-          # Unsigned IPA
           mkdir -p output
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
 
-          # 프로파일 주입 및 서명
           cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
           security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
           /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision.plist > $RUNNER_TEMP/entitlements.plist
