@@ -1,9 +1,9 @@
-name: Build ExamAuto IPA & Deploy OTA
+name: Build Signed IPA & Deploy OTA
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,296 +15,104 @@ jobs:
     runs-on: macos-14
 
     steps:
-      - name: 저장소 체크아웃
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: 직접 업로드된 인증서 파일 설치
+      - name: Calculate Dynamic Version
+        id: versioning
         run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
-          security create-keychain -p "actions_pass" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
+          BASE_VERSION="1.0"
+          BUILD_NUMBER=${{ github.run_number }}
+          FULL_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
+          echo "APP_VERSION=${FULL_VERSION}" >> $GITHUB_ENV
+          echo "BUILD_NUM=${BUILD_NUMBER}" >> $GITHUB_ENV
 
-          # 1. p12 파일에서 인증서와 키 추출 및 키체인 등록
-          openssl pkcs12 -in Certificates/cert.p12 -clcerts -nokeys -passin pass:"1" -out $RUNNER_TEMP/cert.cer
-          openssl pkcs12 -in Certificates/cert.p12 -nocerts -nodes -passin pass:"1" -out $RUNNER_TEMP/key.pem
-
-          security import $RUNNER_TEMP/cert.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
-          security import $RUNNER_TEMP/key.pem -k $KEYCHAIN_PATH -T /usr/bin/codesign
-
-          security set-key-partition-list -S apple-tool:,apple: -s -k "actions_pass" $KEYCHAIN_PATH
-          security list-keychains -d user -s $KEYCHAIN_PATH
-
-          rm -f $RUNNER_TEMP/cert.cer $RUNNER_TEMP/key.pem
-
-          # 2. 모바일 프로비저닝 프로필 설치
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision
-
-      - name: 정식 Xcode 아카이브 빌드 및 IPA 추출
+      - name: Extract Certificate and Key
         run: |
-          # 1. 표준 Xcode 프로젝트 구조 생성
-          mkdir -p ExamAuto.xcodeproj
-          cat << 'EOF' > ExamAuto.xcodeproj/project.pbxproj
-          // !$*UTF8*$!
-          {
-            archiveVersion = 1;
-            classes = {
-            };
-            objectVersion = 54;
-            objects = {
-              100000000000000000000001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* App.swift */; };
-              200000000000000000000001 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
-              200000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-              300000000000000000000001 /* ExamAuto.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExamAuto.app; sourceTree = BUILT_PRODUCTS_DIR; };
-              400000000000000000000001 /* AppSource */ = {
-                isa = PBXGroup;
-                children = (
-                  200000000000000000000001 /* App.swift */,
-                  200000000000000000000002 /* Info.plist */,
-                );
-                name = AppSource;
-                path = AppSource;
-                sourceTree = "<group>";
-              };
-              400000000000000000000002 /* MainGroup */ = {
-                isa = PBXGroup;
-                children = (
-                  400000000000000000000001 /* AppSource */,
-                  300000000000000000000001 /* ExamAuto.app */,
-                );
-                sourceTree = "<group>";
-              };
-              500000000000000000000001 /* Sources */ = {
-                isa = PBXSourcesBuildPhase;
-                buildActionMask = 2147483647;
-                files = (
-                  100000000000000000000001 /* App.swift in Sources */,
-                );
-                runOnlyForDeploymentPostprocessing = 0;
-              };
-              600000000000000000000001 /* ExamAuto */ = {
-                isa = PBXNativeTarget;
-                buildConfigurationList = 700000000000000000000001 /* Build configuration list for PBXNativeTarget "ExamAuto" */;
-                buildPhases = (
-                  500000000000000000000001 /* Sources */,
-                );
-                buildRules = (
-                );
-                dependencies = (
-                );
-                name = ExamAuto;
-                productName = ExamAuto;
-                productReference = 300000000000000000000001 /* ExamAuto.app */;
-                productType = "com.apple.product-type.application";
-              };
-              700000000000000000000001 /* Build configuration list for PBXNativeTarget "ExamAuto" */ = {
-                isa = XCConfigurationList;
-                buildConfigurations = (
-                  800000000000000000000001 /* Release */,
-                );
-                defaultConfigurationIsVisible = 0;
-                defaultConfigurationName = Release;
-              };
-              700000000000000000000002 /* Build configuration list for PBXProject "ExamAuto" */ = {
-                isa = XCConfigurationList;
-                buildConfigurations = (
-                  800000000000000000000002 /* Release */,
-                );
-                defaultConfigurationIsVisible = 0;
-                defaultConfigurationName = Release;
-              };
-              800000000000000000000001 /* Release */ = {
-                isa = XCBuildConfiguration;
-                buildSettings = {
-                  ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-                  CODE_SIGN_IDENTITY = "iPhone Distribution: Jiangsu Simcere Pharmaceutical Co.,Ltd";
-                  CODE_SIGN_STYLE = Manual;
-                  DEVELOPMENT_TEAM = VD7465CKUB;
-                  INFOPLIST_FILE = AppSource/Info.plist;
-                  IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-                  LD_RUNPATH_SEARCH_PATHS = (
-                    "$(inherited)",
-                    "@executable_path/Frameworks",
-                  );
-                  PRODUCT_BUNDLE_IDENTIFIER = com.worksin.one;
-                  PRODUCT_NAME = "$(TARGET_NAME)";
-                  PROVISIONING_PROFILE_SPECIFIER = "b6faffb9-be71-4711-b11a-d5e79b38537a";
-                  SWIFT_VERSION = 5.0;
-                  TARGETED_DEVICE_FAMILY = "1,2";
-                };
-                name = Release;
-              };
-              800000000000000000000002 /* Release */ = {
-                isa = XCBuildConfiguration;
-                buildSettings = {
-                  ALWAYS_SEARCH_USER_PATHS = NO;
-                  CLANG_ENABLE_OBJC_ARC = YES;
-                  COPY_PHASE_STRIP = NO;
-                  SDKROOT = iphoneos;
-                };
-                name = Release;
-              };
-              900000000000000000000001 /* Project object */ = {
-                isa = PBXProject;
-                attributes = {
-                  BuildIndependentTargetsInParallel = 1;
-                  LastUpgradeCheck = 1500;
-                  TargetAttributes = {
-                    600000000000000000000001 = {
-                      CreatedOnToolsVersion = 15.0;
-                      ProvisioningStyle = Manual;
-                    };
-                  };
-                };
-                buildConfigurationList = 700000000000000000000002 /* Build configuration list for PBXProject "ExamAuto" */;
-                compatibilityVersion = "Xcode 14.0";
-                developmentRegion = en;
-                hasScannedForEncodings = 0;
-                knownRegions = (
-                  en,
-                  Base,
-                );
-                mainGroup = 400000000000000000000002 /* MainGroup */;
-                productRefGroup = 400000000000000000000002 /* MainGroup */;
-                projectDirPath = "";
-                projectRoot = "";
-                targets = (
-                  600000000000000000000001 /* ExamAuto */,
-                );
-              };
-            };
-            rootObject = 900000000000000000000001 /* Project object */;
-          }
-          EOF
+          mkdir -p $RUNNER_TEMP/certs_out
 
-          # 2. 정규 Scheme 생성 (Clean/Build/Archive 액션 포함)
-          mkdir -p ExamAuto.xcodeproj/xcshareddata/xcschemes
-          cat << 'EOF' > ExamAuto.xcodeproj/xcshareddata/xcschemes/ExamAuto.xcscheme
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Scheme
-             LastUpgradeVersion = "1500"
-             version = "1.7">
-             <BuildAction
-                parallelizeBuildables = "YES"
-                buildImplicitDependencies = "YES">
-                <BuildActionEntries>
-                   <BuildActionEntry
-                      buildForTesting = "YES"
-                      buildForRunning = "YES"
-                      buildForProfiling = "YES"
-                      buildForArchiving = "YES"
-                      buildForAnalyzing = "YES">
-                      <BuildableReference
-                         BuildableIdentifier = "primary"
-                         BlueprintIdentifier = "600000000000000000000001"
-                         BuildableName = "ExamAuto.app"
-                         BlueprintName = "ExamAuto"
-                         ReferencedContainer = "container:ExamAuto.xcodeproj">
-                      </BuildableReference>
-                   </BuildActionEntry>
-                </BuildActionEntries>
-             </BuildAction>
-             <TestAction
-                buildConfiguration = "Release"
-                selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
-                selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-                shouldUseLaunchSchemeArgsEnv = "YES">
-                <Testables>
-                </Testables>
-             </TestAction>
-             <LaunchAction
-                buildConfiguration = "Release"
-                selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
-                selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-                launchStyle = "0"
-                useCustomWorkingDirectory = "NO"
-                ignoresPersistentStateOnLaunch = "NO"
-                debugDocumentVersioning = "YES"
-                debugServiceExtension = "internal"
-                allowLocationSimulation = "YES">
-                <BuildableProductRunnable
-                   runnableDebuggingMode = "0">
-                   <BuildableReference
-                      BuildableIdentifier = "primary"
-                      BlueprintIdentifier = "600000000000000000000001"
-                      BuildableName = "ExamAuto.app"
-                      BlueprintName = "ExamAuto"
-                      ReferencedContainer = "container:ExamAuto.xcodeproj">
-                   </BuildableReference>
-                </BuildableProductRunnable>
-             </LaunchAction>
-             <ProfileAction
-                buildConfiguration = "Release"
-                shouldUseLaunchSchemeArgsEnv = "YES"
-                savedToolIdentifier = ""
-                useCustomWorkingDirectory = "NO"
-                debugDocumentVersioning = "YES">
-                <BuildableProductRunnable
-                   runnableDebuggingMode = "0">
-                   <BuildableReference
-                      BuildableIdentifier = "primary"
-                      BlueprintIdentifier = "600000000000000000000001"
-                      BuildableName = "ExamAuto.app"
-                      BlueprintName = "ExamAuto"
-                      ReferencedContainer = "container:ExamAuto.xcodeproj">
-                   </BuildableReference>
-                </BuildableProductRunnable>
-             </ProfileAction>
-             <AnalyzeAction
-                buildConfiguration = "Release">
-             </AnalyzeAction>
-             <ArchiveAction
-                buildConfiguration = "Release"
-                revealArchiveInOrganizer = "YES">
-             </ArchiveAction>
-          </Scheme>
-          EOF
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem
 
-          # 3. xcodebuild 아카이브 실행
-          xcodebuild archive \
-            -project ExamAuto.xcodeproj \
-            -scheme ExamAuto \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath $PWD/build/ExamAuto.xcarchive
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem
 
-          # 4. Enterprise ExportOptions.plist 생성 및 IPA 추출
-          cat << 'EOF' > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>enterprise</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>teamID</key>
-              <string>VD7465CKUB</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.worksin.one</key>
-                  <string>b6faffb9-be71-4711-b11a-d5e79b38537a</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
+          security create-keychain -p "actions" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
 
-          xcodebuild -exportArchive \
-            -archivePath $PWD/build/ExamAuto.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath $PWD/output
+          cat $RUNNER_TEMP/certs_out/cert.pem $RUNNER_TEMP/certs_out/key.pem > $RUNNER_TEMP/certs_out/combined.pem
+          openssl pkcs12 -export -in $RUNNER_TEMP/certs_out/combined.pem -out $RUNNER_TEMP/certs_out/rebuilt.p12 -passout pass:actions
+          
+          security import $RUNNER_TEMP/certs_out/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-      - name: OTA Manifest & 웹페이지 생성
+      # [보안 빌드] 최적화 컴파일 및 심볼 스트립 적용
+      - name: Build Secure Obfuscated iOS Binary
+        run: |
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          
+          swiftc -target arm64-apple-ios15.0 \
+                 -sdk "$SDK_PATH" \
+                 -framework SwiftUI \
+                 -framework WebKit \
+                 -framework UIKit \
+                 -O \
+                 -whole-module-optimization \
+                 -parse-as-library \
+                 Sources/App.swift \
+                 -o ExamAuto
+
+          strip -r -u ExamAuto
+
+      - name: Package and Sign IPA
+        run: |
+          mkdir -p Payload/ExamAuto.app
+          
+          cp ExamAuto Payload/ExamAuto.app/ExamAuto
+          cp Sources/Info.plist Payload/ExamAuto.app/Info.plist
+          cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
+          
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" Payload/ExamAuto.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" Payload/ExamAuto.app/Info.plist
+
+          security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
+          /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision.plist > $RUNNER_TEMP/entitlements.plist
+
+          CERT_ID=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
+          echo "Signing with: $CERT_ID"
+
+          codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements.plist --timestamp=none Payload/ExamAuto.app
+          
+          IPA_FILENAME="ExamAuto.ipa"
+          zip -qr "$IPA_FILENAME" Payload
+          echo "IPA_FILENAME=${IPA_FILENAME}" >> $GITHUB_ENV
+
+      - name: Publish Pure IPA to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.APP_VERSION }}"
+          name: "ExamAuto v${{ env.APP_VERSION }}"
+          files: ${{ env.IPA_FILENAME }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # OTA 웹페이지 & Manifest 자동 생성
+      - name: Setup OTA Manifest & Pages Web
         env:
           GH_OWNER: ${{ github.repository_owner }}
           GH_REPO: ${{ github.event.repository.name }}
         run: |
           mkdir -p public
-          cp output/*.ipa public/ExamAuto.ipa
+          cp ExamAuto.ipa public/ExamAuto.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
 
+          # OTA 57px, 512px 필수 더미 아이콘 생성
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 --decode > public/icon57.png
           cp public/icon57.png public/icon512.png
 
@@ -346,7 +154,7 @@ jobs:
                           <key>bundle-identifier</key>
                           <string>com.worksin.one</string>
                           <key>bundle-version</key>
-                          <string>1.0.0</string>
+                          <string>${APP_VERSION}</string>
                           <key>kind</key>
                           <string>software</string>
                           <key>title</key>
@@ -381,7 +189,7 @@ jobs:
           </html>
           EOF
 
-      - name: GitHub Pages 아티팩트 업로드
+      - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
@@ -393,6 +201,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: GitHub Pages 배포
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
