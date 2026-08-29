@@ -43,15 +43,17 @@ jobs:
 
       - name: 표준 Xcode 프로젝트 생성 및 IPA 아카이브/빌드
         run: |
-          # 1. xcodegen 설치
-          brew install xcodegen
+          # 1. Xcode 15 호환 XcodeGen 2.42.0 직접 다운로드 및 설치
+          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip -o xcodegen.zip
+          unzip -q xcodegen.zip -d xcodegen_bin
+          sudo cp xcodegen_bin/bin/xcodegen /usr/local/bin/xcodegen
+          rm -rf xcodegen.zip xcodegen_bin
 
-          # 2. project.yml 생성 (Xcode 15 호환 포맷 지정)
+          # 2. project.yml 생성
           cat << 'EOF' > project.yml
           name: ExamAuto
           options:
             bundleIdPrefix: com.SFn27a
-            xcodeVersion: "15.4"
             deploymentTarget:
               iOS: "15.0"
           targets:
