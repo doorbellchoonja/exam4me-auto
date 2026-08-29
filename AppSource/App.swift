@@ -181,6 +181,10 @@ struct ContentView: View {
     @State private var showSettings: Bool = false
     @State private var showIdkAnswerAlert: Bool = false
     @State private var timer: Timer? = nil
+    
+    // 유튜브 상태 관리 변수
+    @State private var showYouTube: Bool = false
+    @State private var isYouTubeMinimized: Bool = false
 
     var body: some View {
         ZStack {
@@ -333,56 +337,119 @@ struct ContentView: View {
                     .padding(.bottom, 8)
             }
 
+            // 뻐기기(타이머 대기) & 유튜브 오버레이 로직
             if isDelaying {
-                Color.black.opacity(0.5)
+                Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.5)
                     .background(.ultraThinMaterial)
                     .edgesIgnoringSafeArea(.all)
                     .transition(.opacity)
 
-                VStack(spacing: 24) {
+                if showYouTube && !isYouTubeMinimized {
+                    // 전체화면 유튜브 모드
                     ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 10)
-                            .frame(width: 150, height: 150)
-
-                        Circle()
-                            .trim(from: 0, to: 0.85)
-                            .stroke(
-                                AngularGradient(
-                                    gradient: Gradient(colors: [.cyan, .blue, .purple, .cyan]),
-                                    center: .center
-                                ),
-                                style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                            )
-                            .frame(width: 150, height: 150)
-                            .rotationEffect(.degrees(Double(remainingSeconds) * 6))
-                            .animation(.linear(duration: 1), value: remainingSeconds)
-
-                        VStack(spacing: 4) {
-                            Image(systemName: "hourglass")
-                                .font(.system(size: 26))
-                                .foregroundColor(.cyan)
-                            Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
-                                .font(.system(size: 30, weight: .heavy, design: .rounded))
-                                .foregroundColor(.white)
+                        YouTubeWebViewContainer(urlString: "https://www.youtube.com")
+                            .edgesIgnoringSafeArea(.all)
+                        
+                        VStack {
+                            HStack {
+                                // 좌측 상단 실시간 타이머
+                                Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(Color.black.opacity(0.7))
+                                    .cornerRadius(12)
+                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                
+                                Spacer()
+                                
+                                // 우측 상단 최소화 버튼
+                                Button(action: {
+                                    withAnimation { isYouTubeMinimized = true }
+                                }) {
+                                    Image(systemName: "minus.rectangle.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundColor(.white)
+                                        .background(Color.black.opacity(0.7))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                            
+                            Spacer()
                         }
                     }
+                    .transition(.move(edge: .bottom))
+                } else {
+                    // 기본 뻐기기 화면 (또는 유튜브 최소화 상태)
+                    VStack(spacing: 24) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.1), lineWidth: 10)
+                                .frame(width: 150, height: 150)
 
-                    VStack(spacing: 8) {
-                        Text("뻐기는중입니다!")
-                            .font(.system(size: 22, weight: .bold))
+                            Circle()
+                                .trim(from: 0, to: 0.85)
+                                .stroke(
+                                    AngularGradient(
+                                        gradient: Gradient(colors: [.cyan, .blue, .purple, .cyan]),
+                                        center: .center
+                                    ),
+                                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                                )
+                                .frame(width: 150, height: 150)
+                                .rotationEffect(.degrees(Double(remainingSeconds) * 6))
+                                .animation(.linear(duration: 1), value: remainingSeconds)
+
+                            VStack(spacing: 4) {
+                                Image(systemName: "hourglass")
+                                    .font(.system(size: 26))
+                                    .foregroundColor(.cyan)
+                                Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
+                                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                        }
+
+                        VStack(spacing: 8) {
+                            Text("뻐기는중입니다!")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
+
+                            Text("앱을 닫으면 뻐기기에 실패하니\n앱을 열고있어주세요!")
+                                .font(.system(size: 14, weight: .medium))
+                                .multilineTextAlignment(.center)
+                                .foregroundColor(.white.opacity(0.8))
+                                .lineSpacing(4)
+                        }
+                        
+                        // 유튜브 진입 / 열기 버튼
+                        Button(action: {
+                            withAnimation {
+                                showYouTube = true
+                                isYouTubeMinimized = false
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "play.rectangle.fill")
+                                Text(showYouTube && isYouTubeMinimized ? "유튜브 다시 열기" : "시간뻐기면서 유튜브보기")
+                            }
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.white)
-
-                        Text("앱을 닫으면 뻐기기에 실패하니\n앱을 열고있어주세요!")
-                            .font(.system(size: 14, weight: .medium))
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.white.opacity(0.8))
-                            .lineSpacing(4)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                            .background(Color.red)
+                            .cornerRadius(14)
+                            .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
+                        }
+                        .padding(.top, 10)
                     }
+                    .padding(40)
+                    .liquidGlass()
+                    .padding(30)
                 }
-                .padding(40)
-                .liquidGlass()
-                .padding(30)
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -426,7 +493,11 @@ struct ContentView: View {
 
     private func startDelay(minutes: Int) {
         remainingSeconds = minutes * 60
-        withAnimation { isDelaying = true }
+        withAnimation { 
+            isDelaying = true 
+            showYouTube = false
+            isYouTubeMinimized = false
+        }
         UIApplication.shared.isIdleTimerDisabled = true
 
         timer?.invalidate()
@@ -435,7 +506,11 @@ struct ContentView: View {
                 remainingSeconds -= 1
             } else {
                 timer?.invalidate()
-                withAnimation { isDelaying = false }
+                withAnimation { 
+                    isDelaying = false 
+                    showYouTube = false
+                    isYouTubeMinimized = false
+                }
                 UIApplication.shared.isIdleTimerDisabled = false
                 showAlert("이제 저장해도 좋습니다.")
             }
@@ -454,6 +529,30 @@ struct ContentView: View {
         }
         topController.present(alert, animated: true)
     }
+}
+
+// 유튜브 전용 독립 웹뷰 래퍼
+struct YouTubeWebViewContainer: UIViewRepresentable {
+    let urlString: String
+    
+    func makeUIView(context: Context) -> WKWebView {
+        let prefs = WKPreferences()
+        prefs.javaScriptCanOpenWindowsAutomatically = true
+        let config = WKWebViewConfiguration()
+        config.preferences = prefs
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        
+        if let url = URL(string: urlString) {
+            webView.load(URLRequest(url: url))
+        }
+        return webView
+    }
+    
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
 struct SettingsView: View {
@@ -483,7 +582,6 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // 앱 정보 및 공유/버그 카드
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "info.circle.fill")
@@ -607,7 +705,6 @@ struct SettingsView: View {
         }
     }
     
-    // 공유 시트 호출 함수
     private func shareApp() {
         let repoURL = "https://doorbellchoonja.github.io/exam4me-auto"
         guard let url = URL(string: repoURL) else { return }
