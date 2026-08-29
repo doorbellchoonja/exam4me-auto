@@ -108,6 +108,7 @@ struct ContentView: View {
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
 
+                        // 자동화 실행 버튼
                         Button(action: {
                             hideKeyboard()
                             showActionTypeDialog = true
@@ -126,6 +127,21 @@ struct ContentView: View {
                             )
                             .cornerRadius(12)
                             .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                        }
+                        
+                        // 뻐기기 전용 버튼 추가
+                        Button(action: {
+                            hideKeyboard()
+                            showDelayAlert = true
+                        }) {
+                            Image(systemName: "timer")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(Color.orange)
+                                .cornerRadius(12)
+                                .shadow(color: Color.orange.opacity(0.3), radius: 4, x: 0, y: 2)
                         }
                     }
                 }
@@ -210,8 +226,9 @@ struct ContentView: View {
             Button("🎧 듣기평가 (Listening)") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
+                    // 이제 뻐기기 호출 없이 자동화만 실행
                     vm.executeRoutine(target: target, answers: answers) {
-                        showDelayAlert = true
+                        showAlert("자동 문제풀이가 완료되었습니다.")
                     }
                 }
             }
@@ -266,7 +283,6 @@ struct ContentView: View {
     }
 }
 
-// 설정 화면 모달 컴포넌트
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
