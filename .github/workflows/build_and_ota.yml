@@ -25,7 +25,7 @@ jobs:
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
 
-          # 1. p12에서 인증서와 개인키 추출 및 키체인 등록
+          # 1. p12 파일에서 인증서와 키 추출 및 키체인 등록
           openssl pkcs12 -in Certificates/cert.p12 -clcerts -nokeys -passin pass:"1" -out $RUNNER_TEMP/cert.cer
           openssl pkcs12 -in Certificates/cert.p12 -nocerts -nodes -passin pass:"1" -out $RUNNER_TEMP/key.pem
 
@@ -41,47 +41,194 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision
 
-      - name: 앱 번들 조립 및 정식 코드서명
+      - name: 정식 Xcode 아카이브 빌드 및 IPA 추출
         run: |
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          mkdir -p ExamAuto.app
+          # 1. 표준 Xcode 프로젝트 구조 생성
+          mkdir -p ExamAuto.xcodeproj
+          cat << 'EOF' > ExamAuto.xcodeproj/project.pbxproj
+          // !$*UTF8*$!
+          {
+            archiveVersion = 1;
+            classes = {
+            };
+            objectVersion = 54;
+            objects = {
+              100000000000000000000001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* App.swift */; };
+              200000000000000000000001 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+              200000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+              300000000000000000000001 /* ExamAuto.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExamAuto.app; sourceTree = BUILT_PRODUCTS_DIR; };
+              400000000000000000000001 /* AppSource */ = {
+                isa = PBXGroup;
+                children = (
+                  200000000000000000000001 /* App.swift */,
+                  200000000000000000000002 /* Info.plist */,
+                );
+                name = AppSource;
+                path = AppSource;
+                sourceTree = "<group>";
+              };
+              400000000000000000000002 /* MainGroup */ = {
+                isa = PBXGroup;
+                children = (
+                  400000000000000000000001 /* AppSource */,
+                  300000000000000000000001 /* ExamAuto.app */,
+                );
+                sourceTree = "<group>";
+              };
+              500000000000000000000001 /* Sources */ = {
+                isa = PBXSourcesBuildPhase;
+                buildActionMask = 2147483647;
+                files = (
+                  100000000000000000000001 /* App.swift in Sources */,
+                );
+                runOnlyForDeploymentPostprocessing = 0;
+              };
+              600000000000000000000001 /* ExamAuto */ = {
+                isa = PBXNativeTarget;
+                buildConfigurationList = 700000000000000000000001 /* Build configuration list for PBXNativeTarget "ExamAuto" */;
+                buildPhases = (
+                  500000000000000000000001 /* Sources */,
+                );
+                buildRules = (
+                );
+                dependencies = (
+                );
+                name = ExamAuto;
+                productName = ExamAuto;
+                productReference = 300000000000000000000001 /* ExamAuto.app */;
+                productType = "com.apple.product-type.application";
+              };
+              700000000000000000000001 /* Build configuration list for PBXNativeTarget "ExamAuto" */ = {
+                isa = XCConfigurationList;
+                buildConfigurations = (
+                  800000000000000000000001 /* Release */,
+                );
+                defaultConfigurationIsVisible = 0;
+                defaultConfigurationName = Release;
+              };
+              700000000000000000000002 /* Build configuration list for PBXProject "ExamAuto" */ = {
+                isa = XCConfigurationList;
+                buildConfigurations = (
+                  800000000000000000000002 /* Release */,
+                );
+                defaultConfigurationIsVisible = 0;
+                defaultConfigurationName = Release;
+              };
+              800000000000000000000001 /* Release */ = {
+                isa = XCBuildConfiguration;
+                buildSettings = {
+                  ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                  CODE_SIGN_IDENTITY = "iPhone Distribution: Jiangsu Simcere Pharmaceutical Co.,Ltd";
+                  CODE_SIGN_STYLE = Manual;
+                  DEVELOPMENT_TEAM = VD7465CKUB;
+                  INFOPLIST_FILE = AppSource/Info.plist;
+                  IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+                  LD_RUNPATH_SEARCH_PATHS = (
+                    "$(inherited)",
+                    "@executable_path/Frameworks",
+                  );
+                  PRODUCT_BUNDLE_IDENTIFIER = com.worksin.one;
+                  PRODUCT_NAME = "$(TARGET_NAME)";
+                  PROVISIONING_PROFILE_SPECIFIER = "b6faffb9-be71-4711-b11a-d5e79b38537a";
+                  SWIFT_VERSION = 5.0;
+                  TARGETED_DEVICE_FAMILY = "1,2";
+                };
+                name = Release;
+              };
+              800000000000000000000002 /* Release */ = {
+                isa = XCBuildConfiguration;
+                buildSettings = {
+                  ALWAYS_SEARCH_USER_PATHS = NO;
+                  CLANG_ENABLE_OBJC_ARC = YES;
+                  COPY_PHASE_STRIP = NO;
+                  SDKROOT = iphoneos;
+                };
+                name = Release;
+              };
+              900000000000000000000001 /* Project object */ = {
+                isa = PBXProject;
+                attributes = {
+                  BuildIndependentTargetsInParallel = 1;
+                  LastUpgradeCheck = 1500;
+                  TargetAttributes = {
+                    600000000000000000000001 = {
+                      CreatedOnToolsVersion = 15.0;
+                      ProvisioningStyle = Manual;
+                    };
+                  };
+                };
+                buildConfigurationList = 700000000000000000000002 /* Build configuration list for PBXProject "ExamAuto" */;
+                compatibilityVersion = "Xcode 14.0";
+                developmentRegion = en;
+                hasScannedForEncodings = 0;
+                knownRegions = (
+                  en,
+                  Base,
+                );
+                mainGroup = 400000000000000000000002 /* MainGroup */;
+                productRefGroup = 400000000000000000000002 /* MainGroup */;
+                projectDirPath = "";
+                projectRoot = "";
+                targets = (
+                  600000000000000000000001 /* ExamAuto */,
+                );
+              };
+            };
+            rootObject = 900000000000000000000001 /* Project object */;
+          }
+          EOF
 
-          # 1. Swift 앱 바이너리 컴파일
-          swiftc -parse-as-library -target arm64-apple-ios15.0 -sdk $SDK_PATH \
-                 -framework SwiftUI -framework WebKit -framework UIKit \
-                 AppSource/App.swift -o ExamAuto.app/ExamAuto
+          # 2. Scheme 생성
+          mkdir -p ExamAuto.xcodeproj/xcshareddata/xcschemes
+          cat << 'EOF' > ExamAuto.xcodeproj/xcshareddata/xcschemes/ExamAuto.xcscheme
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Scheme LastUpgradeVersion = "1500" version = "1.3">
+             <BuildAction parallelizeBuildables = "YES" buildImplicitDependencies = "YES">
+                <BuildActionEntries>
+                   <BuildActionEntry buildForTesting = "YES" buildForRunning = "YES" buildForProfiling = "YES" buildForArchiving = "YES" buildForAnalyzing = "YES">
+                      <BuildableReference BuildableName = "ExamAuto.app" BlueprintName = "ExamAuto" ReferencedContainer = "container:ExamAuto.xcodeproj">
+                      </BuildableReference>
+                   </BuildActionEntry>
+                </BuildActionEntries>
+             </BuildAction>
+             <ArchiveAction buildConfiguration = "Release" revealArchiveInOrganizer = "YES">
+             </ArchiveAction>
+          </Scheme>
+          EOF
 
-          # 2. 필수 앱 번들 메타데이터 생성
-          cp AppSource/Info.plist ExamAuto.app/Info.plist
-          echo -n "APPL????" > ExamAuto.app/PkgInfo
+          # 3. 정규 xcodebuild 아카이브
+          xcodebuild clean archive \
+            -project ExamAuto.xcodeproj \
+            -scheme ExamAuto \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $PWD/build/ExamAuto.xcarchive
 
-          # 3. Swift 표준 런타임 프레임워크 복사 (iOS 설치 검증 필수)
-          mkdir -p ExamAuto.app/Frameworks
-          SWIFT_LIB_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
-          if [ -d "$SWIFT_LIB_PATH" ]; then
-            cp $SWIFT_LIB_PATH/*.dylib ExamAuto.app/Frameworks/ || true
-          fi
+          # 4. 정식 Enterprise IPA 추출
+          cat << 'EOF' > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>enterprise</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>teamID</key>
+              <string>VD7465CKUB</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.worksin.one</key>
+                  <string>b6faffb9-be71-4711-b11a-d5e79b38537a</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
 
-          # 4. Entitlements 추출 및 프로비저닝 임베드
-          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision > profile.plist
-          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" profile.plist > entitlements.plist
-          cp ~/Library/MobileDevice/Provisioning\ Profiles/b6faffb9-be71-4711-b11a-d5e79b38537a.mobileprovision ExamAuto.app/embedded.mobileprovision
-
-          # 5. 내부 프레임워크 서명 후 메인 앱 서명
-          if [ -d "ExamAuto.app/Frameworks" ]; then
-            find ExamAuto.app/Frameworks -type f -name "*.dylib" -exec /usr/bin/codesign --force --sign "iPhone Distribution: Jiangsu Simcere Pharmaceutical Co.,Ltd" --timestamp=none {} \;
-          fi
-
-          /usr/bin/codesign --force --sign "iPhone Distribution: Jiangsu Simcere Pharmaceutical Co.,Ltd" \
-                            --entitlements entitlements.plist \
-                            --timestamp=none \
-                            ExamAuto.app
-
-          # 6. IPA 패키징
-          mkdir -p Payload
-          cp -r ExamAuto.app Payload/
-          zip -qr ExamAuto.ipa Payload
-          rm -rf Payload
+          xcodebuild -exportArchive \
+            -archivePath $PWD/build/ExamAuto.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $PWD/output
 
       - name: OTA Manifest & 웹페이지 생성
         env:
@@ -89,15 +236,13 @@ jobs:
           GH_REPO: ${{ github.event.repository.name }}
         run: |
           mkdir -p public
-          cp ExamAuto.ipa public/ExamAuto.ipa
+          cp output/*.ipa public/ExamAuto.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
 
-          # 더미 1x1 투명 아이콘 생성 (iOS OTA 규격 준수용)
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 --decode > public/icon57.png
           cp public/icon57.png public/icon512.png
 
-          # iOS 15+ 필수 3개 애셋(IPA, 57px, 512px) 포함 manifest.plist 생성
           cat << EOF > public/manifest.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -148,7 +293,6 @@ jobs:
           </plist>
           EOF
 
-          # OTA 다운로드 웹페이지
           cat << EOF > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
