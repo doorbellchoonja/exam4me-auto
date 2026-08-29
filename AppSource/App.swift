@@ -158,7 +158,6 @@ struct ContentView: View {
                             Image(systemName: "hourglass")
                                 .font(.system(size: 24))
                                 .foregroundColor(.yellow)
-                            // 분:초 카운트다운 표시
                             Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
                                 .font(.system(size: 26, weight: .heavy, design: .rounded))
                                 .foregroundColor(.white)
@@ -202,7 +201,7 @@ struct ContentView: View {
             Button("시작") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
-                    // 1. 웹뷰 자바스크립트 동작 완료 후 -> 2. 뻐기기(타이머) 시작
+                    // 1. 자동화 로직 먼저 실행 -> 2. 완료 후 타이머 시작
                     vm.executeRoutine(target: target, answers: answers) {
                         startDelay(minutes: delayMinutes)
                     }
@@ -216,7 +215,6 @@ struct ContentView: View {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
-    // "(L4) 13514 22421" 같은 문자열에서 Target과 숫자 배열 추출
     private func parseAnswer(_ input: String) -> (String, [Int]) {
         var target = "L4"
         if let start = input.range(of: "(")?.upperBound, let end = input.range(of: ")")?.lowerBound {
@@ -229,7 +227,7 @@ struct ContentView: View {
     private func startDelay(minutes: Int) {
         remainingSeconds = minutes * 60
         withAnimation { isDelaying = true }
-        UIApplication.shared.isIdleTimerDisabled = true // 화면 꺼짐 방지
+        UIApplication.shared.isIdleTimerDisabled = true
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
@@ -239,7 +237,7 @@ struct ContentView: View {
                 timer?.invalidate()
                 withAnimation { isDelaying = false }
                 UIApplication.shared.isIdleTimerDisabled = false
-                showAlert("이제 저장해도 좋습니다.") // 완료 메시지 변경
+                showAlert("이제 저장해도 좋습니다.")
             }
         }
     }
@@ -360,7 +358,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 요청하신 자바스크립트 실행 로직 완벽 적용
     func executeRoutine(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
 
@@ -368,22 +365,19 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             
-            var clickTxt = (txt) => {
-                var el = Array.from(document.querySelectorAll('button, a, div, span, input[type="button"]'))
-                              .find(e => e.innerText.trim() === txt || e.value === txt);
-                if (el) el.click();
-            };
+            // 엔터 키 이벤트 강제 발생
+            var e = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
+            document.dispatchEvent(e);
+            await sleep(500);
 
-            // 1. 초기 진입 버튼 클릭 시퀀스
-            clickTxt('닫기'); await sleep(800);
-            clickTxt('START'); await sleep(800);
-            clickTxt('학습시작'); await sleep(800);
-            clickTxt('학습시작'); await sleep(1000);
+            // 초기 순서: goNext -> goNextInfo -> goStep01
+            if (typeof goNext === 'function') goNext(); await sleep(800);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(800);
+            if (typeof goStep01 === 'function') goStep01(); await sleep(1000);
 
             var answers = \(answersJSON);
             var total = answers.length;
 
-            // 2. 답지 찍기 및 다음 문제 넘어가기
             for (var i = 0; i < total; i++) {
                 var ans = answers[i];
                 var opts = document.querySelectorAll('.answer-item, input[type="radio"], .num' + ans);
@@ -398,17 +392,14 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 await sleep(800);
             }
 
-            // 3. 02 파트 진입
             if (typeof goStep === 'function') goStep('info02'); await sleep(800);
             if (typeof goStep === 'function') goStep('step0201'); await sleep(800);
 
-            // 4. 문제수 -1 만큼 next
             for (var k = 0; k < total - 1; k++) {
                 if (typeof goStep0201_step === 'function') goStep0201_step('next');
                 await sleep(500);
             }
 
-            // 5. 마무리 처리
             if (typeof goStep === 'function') goStep('info03'); await sleep(800);
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(800);
             if (typeof goStep04 === 'function') goStep04('Y');
@@ -419,7 +410,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         
         webView.evaluateJavaScript(script) { _, _ in
             DispatchQueue.main.async {
-                // 자바스크립트 자동화가 끝나면 UI 측에 완료를 알리고 타이머를 시작시킴
                 completion()
             }
         }
