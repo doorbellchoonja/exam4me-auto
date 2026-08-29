@@ -108,7 +108,6 @@ struct ContentView: View {
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
 
-                        // 자동화 실행 버튼
                         Button(action: {
                             hideKeyboard()
                             showActionTypeDialog = true
@@ -129,7 +128,6 @@ struct ContentView: View {
                             .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
                         }
                         
-                        // 뻐기기 전용 버튼 추가
                         Button(action: {
                             hideKeyboard()
                             showDelayAlert = true
@@ -226,9 +224,19 @@ struct ContentView: View {
             Button("🎧 듣기평가 (Listening)") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
-                    // 이제 뻐기기 호출 없이 자동화만 실행
                     vm.executeRoutine(target: target, answers: answers) {
-                        showAlert("자동 문제풀이가 완료되었습니다.")
+                        // 1. 페이지 새로고침
+                        vm.webView.reload()
+                        // 2. 3초 뒤 로딩 완료라 가정하고 나머지 JS 실행 후 팝업 띄우기
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            let postReloadScript = """
+                            if (typeof goNext === 'function') goNext();
+                            if (typeof goNextInfo === 'function') goNextInfo();
+                            """
+                            vm.webView.evaluateJavaScript(postReloadScript, completionHandler: nil)
+                            
+                            showAlert("지금부터 학습시작 버튼 옆의 시계모양 시간 채우기 버튼을 눌러서 시간을 채울수 있습니다.")
+                        }
                     }
                 }
             }
@@ -279,10 +287,16 @@ struct ContentView: View {
               let root = scene.windows.first?.rootViewController else { return }
         let alert = UIAlertController(title: nil, message: msg, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "확인", style: .default))
-        root.present(alert, animated: true)
+        
+        var topController = root
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        topController.present(alert, animated: true)
     }
 }
 
+// 심플하고 모던한 카드형 설정 화면
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
@@ -290,28 +304,50 @@ struct SettingsView: View {
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
 
     var body: some View {
-        NavigationView {
-            List {
-                Section(header: Text("정보")) {
+        VStack(spacing: 24) {
+            // 커스텀 네비게이션 헤더
+            HStack {
+                Text("설정")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                Spacer()
+                Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(Color(.tertiaryLabel))
+                }
+            }
+            .padding(.top, 24)
+            .padding(.horizontal, 20)
+            
+            VStack(spacing: 16) {
+                // 앱 버전 카드
+                VStack {
                     HStack {
                         Text("앱 버전")
+                            .font(.system(size: 15, weight: .medium))
                         Spacer()
                         Text(appVersion)
+                            .font(.system(size: 15))
                             .foregroundColor(.secondary)
                     }
                 }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(16)
                 
-                Section(header: Text("개발자 후원"), footer: Text("서버 유지 및 업데이트에 큰 힘이 됩니다. ☕️")) {
+                // 후원 카드
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("개발자 후원")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.secondary)
+                    
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("SC제일은행")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 14, weight: .medium))
                             Text("560-20-234696")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
                         }
-                        
                         Spacer()
                         
                         Button(action: {
@@ -322,30 +358,31 @@ struct SettingsView: View {
                             }
                         }) {
                             HStack(spacing: 4) {
-                                Image(systemName: showCopyToast ? "checkmark" : "doc.on.doc")
+                                Image(systemName: showCopyToast ? "checkmark" : "doc.on.clipboard")
                                 Text(showCopyToast ? "복사됨" : "복사")
                             }
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(showCopyToast ? .white : .blue)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(showCopyToast ? Color.green : Color.blue.opacity(0.12))
-                            .cornerRadius(10)
+                            .foregroundColor(showCopyToast ? .white : .primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(showCopyToast ? Color.green : Color.gray.opacity(0.12))
+                            .cornerRadius(12)
                         }
                     }
-                    .padding(.vertical, 4)
+                    
+                    Text("서버 유지 및 업데이트에 큰 힘이 됩니다. ☕️")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                 }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(16)
             }
-            .navigationTitle("설정")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("닫기") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
+            .padding(.horizontal, 20)
+            
+            Spacer()
         }
+        .background(Color(.systemGroupedBackground).edgesIgnoringSafeArea(.all))
     }
 }
 
@@ -434,7 +471,12 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler() }))
-        root.present(alert, animated: true)
+        
+        var topController = root
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        topController.present(alert, animated: true)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
@@ -446,7 +488,12 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
         alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
-        root.present(alert, animated: true)
+        
+        var topController = root
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        topController.present(alert, animated: true)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
