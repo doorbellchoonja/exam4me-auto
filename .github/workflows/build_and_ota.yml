@@ -29,7 +29,7 @@ jobs:
           openssl pkcs12 -in Certificates/cert.p12 -clcerts -nokeys -passin pass:"1" -out $RUNNER_TEMP/cert.cer
           openssl pkcs12 -in Certificates/cert.p12 -nocerts -nodes -passin pass:"1" -out $RUNNER_TEMP/key.pem
 
-          # 2. 인증서와 키를 각각 키체인에 안전하게 등록
+          # 2. 인증서와 키를 각각 키체인에 등록
           security import $RUNNER_TEMP/cert.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
           security import $RUNNER_TEMP/key.pem -k $KEYCHAIN_PATH -T /usr/bin/codesign
 
@@ -49,7 +49,8 @@ jobs:
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           mkdir -p ExamAuto.app
 
-          swiftc -target arm64-apple-ios15.0 -sdk $SDK_PATH \
+          # -parse-as-library 옵션을 추가하여 @main 인식 허용
+          swiftc -parse-as-library -target arm64-apple-ios15.0 -sdk $SDK_PATH \
                  -framework SwiftUI -framework WebKit -framework UIKit \
                  AppSource/App.swift -o ExamAuto.app/ExamAuto
 
