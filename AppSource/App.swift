@@ -64,7 +64,7 @@ struct DynamicBackground: View {
                 .offset(x: 150, y: 200)
                 
             Circle()
-                .fill(Color.cyan.opacity(0.2 : 0.3))
+                .fill(Color.cyan.opacity(isDarkMode ? 0.2 : 0.3))
                 .blur(radius: 80)
                 .frame(width: 250, height: 250)
                 .offset(x: -50, y: 400)
@@ -208,7 +208,6 @@ struct GuideView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨게 합니다.")
                             
-                            // 제공된 웹 링크 이미지 로드
                             AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
                                 switch phase {
                                 case .empty:
@@ -728,7 +727,6 @@ struct SettingsView: View {
                             
                             Divider().background(Color.primary.opacity(0.1))
                             
-                            // 업데이트 체크 버튼 추가
                             Button(action: { showUpdateAlert = true }) {
                                 HStack {
                                     Text("업데이트 체크")
@@ -844,7 +842,6 @@ struct SettingsView: View {
         } message: {
             Text("제작자한테 디엠하세요.")
         }
-        // 업데이트 체크 알림창 및 사파리 이동 연동
         .alert("업데이트 체크", isPresented: $showUpdateAlert) {
             Button("확인") {
                 if let url = URL(string: "https://doorbellchoonja.github.io/exam4me-auto") {
