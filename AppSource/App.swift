@@ -1,24 +1,76 @@
 import SwiftUI
 import WebKit
+import Network
 
 @main
 struct Exam4meApp: App {
     @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
     @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var isLoading = true
+    @StateObject private var networkMonitor = NetworkMonitor()
 
     var body: some Scene {
         WindowGroup {
-            if !hasAgreedToTerms {
-                TermsView(hasAgreed: $hasAgreedToTerms)
-                    .preferredColorScheme(isDarkMode ? .dark : .light)
-            } else if isLoading {
-                LoadingView(isLoading: $isLoading)
-                    .preferredColorScheme(isDarkMode ? .dark : .light)
-            } else {
-                ContentView()
-                    .preferredColorScheme(isDarkMode ? .dark : .light)
+            ZStack {
+                if !networkMonitor.isConnected {
+                    // 인터넷 연결이 끊겼을 때 뜨는 심플한 오류 화면
+                    OfflineView()
+                } else if !hasAgreedToTerms {
+                    TermsView(hasAgreed: $hasAgreedToTerms)
+                } else if isLoading {
+                    LoadingView(isLoading: $isLoading)
+                } else {
+                    ContentView()
+                }
             }
+            .preferredColorScheme(isDarkMode ? .dark : .light)
+        }
+    }
+}
+
+// 실시간 네트워크 연결 상태 감지 클래스
+class NetworkMonitor: ObservableObject {
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "NetworkMonitor")
+    @Published var isConnected: Bool = true
+
+    init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.isConnected = (path.status == .satisfied)
+            }
+        }
+        monitor.start(queue: queue)
+    }
+}
+
+// 심플한 디자인의 네트워크 연결 해제 오류 화면
+struct OfflineView: View {
+    var body: some View {
+        ZStack {
+            DynamicBackground()
+            
+            VStack(spacing: 24) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+                    .symbolEffect(.bounce.up, options: .repeating)
+                
+                VStack(spacing: 8) {
+                    Text("인터넷 연결 해제됨")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Text("인터넷 연결을 확인하고\n다시 시도해 주세요.")
+                        .font(.system(size: 14, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
+                }
+            }
+            .padding(40)
+            .liquidGlass()
+            .padding(30)
         }
     }
 }
@@ -177,7 +229,6 @@ struct TermsView: View {
     }
 }
 
-// 웹 링크 기반 이미지를 보여주는 가이드 화면
 struct GuideView: View {
     @Environment(\.presentationMode) var presentationMode
     
