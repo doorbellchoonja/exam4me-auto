@@ -13,7 +13,6 @@ struct Exam4meApp: App {
         WindowGroup {
             ZStack {
                 if !networkMonitor.isConnected {
-                    // 인터넷 연결이 끊겼을 때 뜨는 심플한 오류 화면
                     OfflineView()
                 } else if !hasAgreedToTerms {
                     TermsView(hasAgreed: $hasAgreedToTerms)
@@ -28,7 +27,6 @@ struct Exam4meApp: App {
     }
 }
 
-// 실시간 네트워크 연결 상태 감지 클래스
 class NetworkMonitor: ObservableObject {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
@@ -44,8 +42,9 @@ class NetworkMonitor: ObservableObject {
     }
 }
 
-// 심플한 디자인의 네트워크 연결 해제 오류 화면
 struct OfflineView: View {
+    @State private var isAnimating = false
+
     var body: some View {
         ZStack {
             DynamicBackground()
@@ -54,7 +53,9 @@ struct OfflineView: View {
                 Image(systemName: "wifi.slash")
                     .font(.system(size: 60))
                     .foregroundColor(.orange)
-                    .symbolEffect(.bounce.up, options: .repeating)
+                    .scaleEffect(isAnimating ? 1.1 : 0.9)
+                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isAnimating)
+                    .onAppear { isAnimating = true }
                 
                 VStack(spacing: 8) {
                     Text("인터넷 연결 해제됨")
