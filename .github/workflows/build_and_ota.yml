@@ -239,9 +239,9 @@ jobs:
                   <img src="icon512.png" alt="App Icon" class="app-icon" />
                   <h2>ExamAuto</h2>
                   <p>v${APP_VERSION} 빌드</p>
-                  <a class="btn btn-primary" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">OTA 다이렉트 설치</a>
-                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto.ipa" download>서명된 IPA 다운로드</a>
-                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto-unsigned.ipa" download>순수 Unsigned IPA 다운로드</a>
+                  <a class="btn btn-primary" href="itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist">자동화 프로그램 설치</a>
+                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto.ipa" download>여기는 점검중인 항목입니다.</a>
+                  <a class="btn btn-secondary" href="${BASE_URL}/ExamAuto-unsigned.ipa" download>여기는 점검중인 항목입니다.</a>
               </div>
           </body>
           </html>
