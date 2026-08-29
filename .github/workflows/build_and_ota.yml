@@ -18,26 +18,29 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: 직접 업로드된 인증서 파일 설치 (호환성 패치 적용)
+      - name: 직접 업로드된 인증서 파일 설치 (직접 추출 및 등록)
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           security create-keychain -p "actions_pass" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "actions_pass" $KEYCHAIN_PATH
 
-          # 1. OpenSSL을 통해 p12를 레거시 호환 형식으로 자동 재패키징
-          openssl pkcs12 -in Certificates/cert.p12 -nodes -passin pass:"1" -out $RUNNER_TEMP/temp.pem
-          openssl pkcs12 -export -legacy -in $RUNNER_TEMP/temp.pem -passout pass:"1" -out $RUNNER_TEMP/legacy_cert.p12
+          # 1. p12에서 인증서와 개인키를 각각 추출
+          openssl pkcs12 -in Certificates/cert.p12 -clcerts -nokeys -passin pass:"1" -out $RUNNER_TEMP/cert.cer
+          openssl pkcs12 -in Certificates/cert.p12 -nocerts -nodes -passin pass:"1" -out $RUNNER_TEMP/key.pem
 
-          # 2. 호환성 변환된 p12를 키체인에 등록
-          security import $RUNNER_TEMP/legacy_cert.p12 -k $KEYCHAIN_PATH -P "1" -T /usr/bin/codesign -A
+          # 2. 인증서와 키를 각각 키체인에 안전하게 등록
+          security import $RUNNER_TEMP/cert.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
+          security import $RUNNER_TEMP/key.pem -k $KEYCHAIN_PATH -T /usr/bin/codesign
+
+          # 3. 키체인 접근 권한 및 검색 목록 설정
           security set-key-partition-list -S apple-tool:,apple: -s -k "actions_pass" $KEYCHAIN_PATH
           security list-keychains -d user -s $KEYCHAIN_PATH
 
-          # 3. 임시 파일 정리
-          rm -f $RUNNER_TEMP/temp.pem $RUNNER_TEMP/legacy_cert.p12
+          # 4. 임시 키 파일 삭제
+          rm -f $RUNNER_TEMP/cert.cer $RUNNER_TEMP/key.pem
 
-          # 4. 모바일 프로비저닝 프로필 설치
+          # 5. 모바일 프로비저닝 프로필 설치
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp Certificates/cert.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/2a94d76b-fdf3-4426-abf8-ca8bbb9ba331.mobileprovision
 
