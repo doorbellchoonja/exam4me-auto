@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var isDelaying: Bool = false
     @State private var showDelayAlert: Bool = false
     @State private var showActionTypeDialog: Bool = false
+    @State private var showSettings: Bool = false
     @State private var timer: Timer? = nil
 
     var body: some View {
@@ -41,6 +42,15 @@ struct ContentView: View {
                         Spacer()
 
                         HStack(spacing: 8) {
+                            Button(action: { showSettings = true }) {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .padding(7)
+                                    .background(Color(.secondarySystemBackground))
+                                    .clipShape(Circle())
+                            }
+
                             Button(action: { vm.webView.reload() }) {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.system(size: 13, weight: .semibold))
@@ -50,18 +60,23 @@ struct ContentView: View {
                                     .clipShape(Circle())
                             }
 
-                            Button(action: { vm.webView.goBack() }) {
+                            Button(action: { 
+                                if vm.webView.canGoBack {
+                                    vm.webView.goBack() 
+                                }
+                            }) {
                                 HStack(spacing: 3) {
                                     Image(systemName: "chevron.left")
                                     Text("뒤로")
                                 }
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.primary)
+                                .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Color(.secondarySystemBackground))
                                 .cornerRadius(20)
                             }
+                            .disabled(!vm.canGoBack)
                         }
                     }
 
@@ -122,14 +137,12 @@ struct ContentView: View {
                 .padding(.top, 4)
                 .padding(.bottom, 6)
 
-                // 웹뷰 컨테이너
                 WebViewContainer(vm: vm)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal, 10)
                     .padding(.bottom, 4)
             }
 
-            // 뻐기기(타이머 대기) 오버레이 모달
             if isDelaying {
                 Color.black.opacity(0.7)
                     .edgesIgnoringSafeArea(.all)
@@ -190,22 +203,24 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
             }
         }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showActionTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기평가 (Listening)") {
-                showDelayAlert = true
+                let (target, answers) = parseAnswer(answerInput)
+                if !answers.isEmpty {
+                    vm.executeRoutine(target: target, answers: answers) {
+                        showDelayAlert = true
+                    }
+                }
             }
             Button("✍️ 쓰기평가 (Writing)", role: .cancel) {}
         }
         .alert("앱에서 몇분을 뻐길건지 설정하세요.", isPresented: $showDelayAlert) {
             TextField("설정 시간(분 단위)", value: $delayMinutes, format: .number)
             Button("시작") {
-                let (target, answers) = parseAnswer(answerInput)
-                if !answers.isEmpty {
-                    // 1. 자동화 로직 먼저 실행 -> 2. 완료 후 타이머 시작
-                    vm.executeRoutine(target: target, answers: answers) {
-                        startDelay(minutes: delayMinutes)
-                    }
-                }
+                startDelay(minutes: delayMinutes)
             }
             Button("취소", role: .cancel) {}
         }
@@ -251,6 +266,73 @@ struct ContentView: View {
     }
 }
 
+// 설정 화면 모달 컴포넌트
+struct SettingsView: View {
+    @Environment(\.presentationMode) var presentationMode
+    @State private var showCopyToast = false
+    
+    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("정보")) {
+                    HStack {
+                        Text("앱 버전")
+                        Spacer()
+                        Text(appVersion)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Section(header: Text("개발자 후원"), footer: Text("서버 유지 및 업데이트에 큰 힘이 됩니다. ☕️")) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("SC제일은행")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.secondary)
+                            Text("560-20-234696")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            UIPasteboard.general.string = "56020234696"
+                            withAnimation { showCopyToast = true }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                withAnimation { showCopyToast = false }
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: showCopyToast ? "checkmark" : "doc.on.doc")
+                                Text(showCopyToast ? "복사됨" : "복사")
+                            }
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(showCopyToast ? .white : .blue)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(showCopyToast ? Color.green : Color.blue.opacity(0.12))
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .navigationTitle("설정")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("닫기") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct StatusBadge: View {
     let title: String
     let count: Int
@@ -288,7 +370,9 @@ struct WebViewContainer: UIViewRepresentable {
 class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
     @Published var listeningCount: Int = 0
     @Published var vocabCount: Int = 0
+    @Published var canGoBack: Bool = false
     let webView: WKWebView
+    private var backForwardObserver: NSKeyValueObservation?
 
     override init() {
         let prefs = WKPreferences()
@@ -304,9 +388,19 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         self.webView.navigationDelegate = self
         self.webView.uiDelegate = self 
         
+        backForwardObserver = self.webView.observe(\.canGoBack, options: .new) { [weak self] webView, _ in
+            DispatchQueue.main.async {
+                self?.canGoBack = webView.canGoBack
+            }
+        }
+        
         if let url = URL(string: "https://ssdasa.exam4me.com") {
             self.webView.load(URLRequest(url: url))
         }
+    }
+
+    deinit {
+        backForwardObserver?.invalidate()
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
@@ -365,12 +459,10 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             
-            // 엔터 키 이벤트 강제 발생
             var e = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
             document.dispatchEvent(e);
             await sleep(500);
 
-            // 초기 순서: goNext -> goNextInfo -> goStep01
             if (typeof goNext === 'function') goNext(); await sleep(800);
             if (typeof goNextInfo === 'function') goNextInfo(); await sleep(800);
             if (typeof goStep01 === 'function') goStep01(); await sleep(1000);
@@ -380,8 +472,10 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 
             for (var i = 0; i < total; i++) {
                 var ans = answers[i];
-                var opts = document.querySelectorAll('.answer-item, input[type="radio"], .num' + ans);
-                if (opts.length >= ans) { opts[ans - 1].click(); }
+                
+                if (typeof goStep01_sel === 'function') {
+                    goStep01_sel(i, 2, ans);
+                }
                 await sleep(500);
 
                 if (i < total - 1) {
