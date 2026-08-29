@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 @main
-struct ExamAutoApp: App {
+struct Exam4meApp: App {
     @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
     @State private var isLoading = true
 
@@ -19,29 +19,79 @@ struct ExamAutoApp: App {
     }
 }
 
-// 1. 초기 로딩 (스플래시) 화면
+// 공통 리퀴드 글래스 모디파이어
+struct LiquidGlassModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial)
+            .background(Color.white.opacity(0.15))
+            .cornerRadius(20)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
+    }
+}
+
+extension View {
+    func liquidGlass() -> some View {
+        self.modifier(LiquidGlassModifier())
+    }
+}
+
+// 화려한 백그라운드 (글래스 효과 극대화)
+struct DynamicBackground: View {
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemBackground).edgesIgnoringSafeArea(.all)
+            
+            Circle()
+                .fill(Color.blue.opacity(0.4))
+                .blur(radius: 80)
+                .frame(width: 300, height: 300)
+                .offset(x: -100, y: -200)
+            
+            Circle()
+                .fill(Color.purple.opacity(0.4))
+                .blur(radius: 80)
+                .frame(width: 300, height: 300)
+                .offset(x: 150, y: 200)
+                
+            Circle()
+                .fill(Color.cyan.opacity(0.3))
+                .blur(radius: 80)
+                .frame(width: 250, height: 250)
+                .offset(x: -50, y: 400)
+        }
+    }
+}
+
+// 1. 화려해진 초기 로딩 (스플래시) 화면
 struct LoadingView: View {
     @Binding var isLoading: Bool
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground).edgesIgnoringSafeArea(.all)
+            DynamicBackground()
             
             VStack(spacing: 24) {
                 ProgressView()
-                    .scaleEffect(1.5)
+                    .scaleEffect(1.8)
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 
                 Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundColor(.primary)
             }
+            .padding(40)
+            .liquidGlass()
         }
         .onAppear {
-            // 5초 ~ 10초 사이 랜덤 딜레이
             let randomTime = Double.random(in: 5.0...10.0)
             DispatchQueue.main.asyncAfter(deadline: .now() + randomTime) {
-                withAnimation(.easeInOut(duration: 0.5)) {
+                withAnimation(.easeInOut(duration: 0.6)) {
                     isLoading = false
                 }
             }
@@ -55,7 +105,7 @@ struct TermsView: View {
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemGroupedBackground).edgesIgnoringSafeArea(.all)
+            DynamicBackground()
             
             VStack(spacing: 30) {
                 Image(systemName: "exclamationmark.shield.fill")
@@ -64,7 +114,7 @@ struct TermsView: View {
                 
                 VStack(spacing: 12) {
                     Text("이용약관 동의")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                     
                     Text("앱을 사용하기 전 아래 약관에 동의해야 합니다.")
                         .font(.system(size: 14))
@@ -73,17 +123,17 @@ struct TermsView: View {
                 
                 VStack {
                     Text("저는 이 앱으로 인해 나중에 들키거나 그때 이 앱 제작자에게 책임을 물지 않겠습니다.")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 15, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .lineSpacing(6)
-                        .padding(20)
+                        .padding(24)
                 }
                 .frame(maxWidth: .infinity)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .background(Color.white.opacity(0.1))
                 .cornerRadius(16)
                 .padding(.horizontal, 24)
                 
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     Button(action: {
                         withAnimation { hasAgreed = true }
                     }) {
@@ -92,12 +142,14 @@ struct TermsView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(Color.blue)
+                            .background(
+                                LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing)
+                            )
                             .cornerRadius(14)
+                            .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     
                     Button(action: {
-                        // 동의 거부 시 앱 강제 종료
                         exit(0)
                     }) {
                         Text("동의하지 않습니다 (앱 종료)")
@@ -105,12 +157,19 @@ struct TermsView: View {
                             .foregroundColor(.red)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(Color.red.opacity(0.1))
+                            .background(.ultraThinMaterial)
                             .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                            )
                     }
                 }
                 .padding(.horizontal, 24)
             }
+            .padding(.vertical, 40)
+            .liquidGlass()
+            .padding(20)
         }
     }
 }
@@ -118,51 +177,52 @@ struct TermsView: View {
 // 3. 메인 콘텐츠 뷰
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
-    @State private var answerInput: String = "(L4) 13514 22421 43554 42152"
+    @State private var answerInput: String = "" // 예시 답안 제거
     @State private var delayMinutes: Int = 10
     @State private var remainingSeconds: Int = 0
     @State private var isDelaying: Bool = false
     @State private var showDelayAlert: Bool = false
     @State private var showActionTypeDialog: Bool = false
     @State private var showSettings: Bool = false
+    @State private var showIdkAnswerAlert: Bool = false
     @State private var timer: Timer? = nil
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemGroupedBackground)
-                .edgesIgnoringSafeArea(.all)
+            DynamicBackground()
 
             VStack(spacing: 0) {
-                // 상단 네비게이션 & 컨트롤 카드
-                VStack(spacing: 12) {
+                // 상단 네비게이션 & 컨트롤 카드 (리퀴드 글래스)
+                VStack(spacing: 16) {
                     HStack {
                         HStack(spacing: 6) {
                             Circle()
                                 .fill(vm.listeningCount > 0 ? Color.green : Color.orange)
                                 .frame(width: 8, height: 8)
-                            Text("Exam4Me Auto")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .shadow(color: vm.listeningCount > 0 ? .green : .orange, radius: 4)
+                            Text("Exam4me")
+                                .font(.system(size: 18, weight: .heavy, design: .rounded))
                                 .foregroundColor(.primary)
                         }
 
                         Spacer()
 
-                        HStack(spacing: 8) {
+                        HStack(spacing: 12) {
                             Button(action: { showSettings = true }) {
                                 Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .padding(7)
-                                    .background(Color(.secondarySystemBackground))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .padding(10)
+                                    .background(.ultraThinMaterial)
                                     .clipShape(Circle())
                             }
 
                             Button(action: { vm.webView.reload() }) {
                                 Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .padding(7)
-                                    .background(Color(.secondarySystemBackground))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .padding(10)
+                                    .background(.ultraThinMaterial)
                                     .clipShape(Circle())
                             }
 
@@ -171,22 +231,22 @@ struct ContentView: View {
                                     vm.webView.goBack() 
                                 }
                             }) {
-                                HStack(spacing: 3) {
+                                HStack(spacing: 4) {
                                     Image(systemName: "chevron.left")
                                     Text("뒤로")
                                 }
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(size: 13, weight: .bold))
                                 .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color(.secondarySystemBackground))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial)
                                 .cornerRadius(20)
                             }
                             .disabled(!vm.canGoBack)
                         }
                     }
 
-                    HStack(spacing: 10) {
+                    HStack(spacing: 12) {
                         StatusBadge(
                             title: "Listening",
                             count: vm.listeningCount,
@@ -201,127 +261,137 @@ struct ContentView: View {
                         )
                     }
 
-                    HStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "doc.text.magnifyingglass")
-                                .foregroundColor(.secondary)
-                                .font(.system(size: 14))
-                            TextField("답지 입력: (L4) 13514...", text: $answerInput)
-                                .font(.system(size: 13))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-
-                        Button(action: {
-                            hideKeyboard()
-                            showActionTypeDialog = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 12))
-                                Text("학습시작")
-                                    .font(.system(size: 13, weight: .bold))
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            HStack {
+                                Image(systemName: "doc.text.magnifyingglass")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 15))
+                                TextField("답지 입력...", text: $answerInput)
+                                    .font(.system(size: 14))
                             }
-                            .foregroundColor(.white)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(
-                                LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .leading, endPoint: .trailing)
-                            )
-                            .cornerRadius(12)
-                            .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                            .padding(.vertical, 12)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(14)
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.3), lineWidth: 1))
+
+                            Button(action: {
+                                hideKeyboard()
+                                showActionTypeDialog = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "play.fill")
+                                    Text("시작")
+                                }
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                                .cornerRadius(14)
+                                .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 3)
+                            }
+                            
+                            Button(action: {
+                                hideKeyboard()
+                                showDelayAlert = true
+                            }) {
+                                Image(systemName: "timer")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        LinearGradient(colors: [Color.orange, Color.pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    )
+                                    .cornerRadius(14)
+                                    .shadow(color: Color.orange.opacity(0.4), radius: 6, x: 0, y: 3)
+                            }
                         }
                         
-                        // 뻐기기(시간 채우기) 전용 버튼
-                        Button(action: {
-                            hideKeyboard()
-                            showDelayAlert = true
-                        }) {
-                            Image(systemName: "timer")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .background(Color.orange)
-                                .cornerRadius(12)
-                                .shadow(color: Color.orange.opacity(0.3), radius: 4, x: 0, y: 2)
+                        // 답지를 모르겠나요 버튼
+                        HStack {
+                            Button(action: {
+                                showIdkAnswerAlert = true
+                            }) {
+                                Text("답지를 모르겠나요?")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .underline()
+                            }
+                            Spacer()
                         }
+                        .padding(.horizontal, 4)
                     }
                 }
-                .padding(14)
-                .background(Color(.systemBackground))
-                .cornerRadius(18)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
-                .padding(.horizontal, 12)
-                .padding(.top, 4)
-                .padding(.bottom, 6)
+                .padding(18)
+                .liquidGlass()
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
 
+                // 웹뷰 컨테이너
                 WebViewContainer(vm: vm)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 4)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
             }
 
+            // 뻐기기(타이머 대기) 오버레이 모달
             if isDelaying {
-                Color.black.opacity(0.7)
+                Color.black.opacity(0.5)
+                    .background(.ultraThinMaterial)
                     .edgesIgnoringSafeArea(.all)
                     .transition(.opacity)
 
-                VStack(spacing: 20) {
+                VStack(spacing: 24) {
                     ZStack {
                         Circle()
-                            .stroke(Color.white.opacity(0.15), lineWidth: 8)
-                            .frame(width: 140, height: 140)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 10)
+                            .frame(width: 150, height: 150)
 
                         Circle()
                             .trim(from: 0, to: 0.85)
                             .stroke(
                                 AngularGradient(
-                                    gradient: Gradient(colors: [.orange, .yellow, .orange]),
+                                    gradient: Gradient(colors: [.cyan, .blue, .purple, .cyan]),
                                     center: .center
                                 ),
-                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                                style: StrokeStyle(lineWidth: 10, lineCap: .round)
                             )
-                            .frame(width: 140, height: 140)
+                            .frame(width: 150, height: 150)
                             .rotationEffect(.degrees(Double(remainingSeconds) * 6))
                             .animation(.linear(duration: 1), value: remainingSeconds)
 
-                        VStack(spacing: 2) {
+                        VStack(spacing: 4) {
                             Image(systemName: "hourglass")
-                                .font(.system(size: 24))
-                                .foregroundColor(.yellow)
+                                .font(.system(size: 26))
+                                .foregroundColor(.cyan)
                             Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
-                                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                                .font(.system(size: 30, weight: .heavy, design: .rounded))
                                 .foregroundColor(.white)
                         }
                     }
 
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         Text("뻐기는중입니다!")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.white)
 
                         Text("앱을 닫으면 뻐기기에 실패하니\n앱을 열고있어주세요!")
-                            .font(.system(size: 13))
+                            .font(.system(size: 14, weight: .medium))
                             .multilineTextAlignment(.center)
                             .foregroundColor(.white.opacity(0.8))
-                            .lineSpacing(3)
+                            .lineSpacing(4)
                     }
                 }
+                .padding(40)
+                .liquidGlass()
                 .padding(30)
-                .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(Color(UIColor.darkGray).opacity(0.85))
-                        .cornerRadius(24)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-                .padding(30)
-                .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -334,7 +404,8 @@ struct ContentView: View {
                     vm.executeRoutine(target: target, answers: answers) {}
                 }
             }
-            Button("✍️ 쓰기평가 (Writing)", role: .cancel) {}
+            // 쓰기평가 제거됨
+            Button("취소", role: .cancel) {}
         }
         .alert("앱에서 몇분을 뻐길건지 설정하세요.", isPresented: $showDelayAlert) {
             TextField("설정 시간(분 단위)", value: $delayMinutes, format: .number)
@@ -342,6 +413,11 @@ struct ContentView: View {
                 startDelay(minutes: delayMinutes)
             }
             Button("취소", role: .cancel) {}
+        }
+        .alert("안내", isPresented: $showIdkAnswerAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("장하현한테 물어보세요.")
         }
     }
 
@@ -390,93 +466,148 @@ struct ContentView: View {
     }
 }
 
-// 심플한 카드형 설정 화면
+// 심플하고 모던한 글래스모피즘 설정 화면
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showCopyToast = false
+    @State private var showBugReportAlert = false
     
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
 
     var body: some View {
-        VStack(spacing: 24) {
-            HStack {
-                Text("설정")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                Spacer()
-                Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(Color(.tertiaryLabel))
-                }
-            }
-            .padding(.top, 24)
-            .padding(.horizontal, 20)
+        ZStack {
+            DynamicBackground()
             
-            VStack(spacing: 16) {
-                VStack {
-                    HStack {
-                        Text("앱 버전")
-                            .font(.system(size: 15, weight: .medium))
-                        Spacer()
-                        Text(appVersion)
-                            .font(.system(size: 15))
-                            .foregroundColor(.secondary)
+            VStack(spacing: 24) {
+                HStack {
+                    Text("설정")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    Spacer()
+                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundColor(.primary.opacity(0.6))
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(16)
+                .padding(.top, 24)
+                .padding(.horizontal, 20)
                 
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("개발자 후원")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.secondary)
-                    
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("SC제일은행")
-                                .font(.system(size: 14, weight: .medium))
-                            Text("560-20-234696")
-                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // 앱 정보 카드
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.blue)
+                                Text("정보")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                            }
+                            
+                            HStack {
+                                Text("앱 버전")
+                                    .font(.system(size: 15, weight: .medium))
+                                Spacer()
+                                Text(appVersion)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Divider().background(Color.white.opacity(0.2))
+                            
+                            Button(action: { showBugReportAlert = true }) {
+                                HStack {
+                                    Text("앱 버그 및 신고")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
-                        Spacer()
+                        .padding(20)
+                        .liquidGlass()
                         
-                        Button(action: {
-                            UIPasteboard.general.string = "56020234696"
-                            withAnimation { showCopyToast = true }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                withAnimation { showCopyToast = false }
+                        // 업데이트 예정 이력
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .foregroundColor(.purple)
+                                Text("업데이트 예정이력")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
                             }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: showCopyToast ? "checkmark" : "doc.on.clipboard")
-                                Text(showCopyToast ? "복사됨" : "복사")
-                            }
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(showCopyToast ? .white : .primary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(showCopyToast ? Color.green : Color.gray.opacity(0.12))
-                            .cornerRadius(12)
+                            Text("곧 쓰기자동화도 넣을예정입니다.")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.secondary)
                         }
+                        .padding(20)
+                        .liquidGlass()
+                        
+                        // 후원 카드
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Image(systemName: "heart.fill")
+                                    .foregroundColor(.pink)
+                                Text("개발자 후원")
+                                    .font(.system(size: 16, weight: .bold))
+                            }
+                            
+                            HStack {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("SC제일은행")
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text("560-20-234696")
+                                        .font(.system(size: 20, weight: .heavy, design: .monospaced))
+                                }
+                                Spacer()
+                                
+                                Button(action: {
+                                    UIPasteboard.general.string = "56020234696"
+                                    withAnimation { showCopyToast = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                        withAnimation { showCopyToast = false }
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: showCopyToast ? "checkmark" : "doc.on.clipboard")
+                                        Text(showCopyToast ? "복사됨" : "복사")
+                                    }
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        showCopyToast ? Color.green : Color.blue
+                                    )
+                                    .cornerRadius(14)
+                                    .shadow(color: (showCopyToast ? Color.green : Color.blue).opacity(0.3), radius: 5)
+                                }
+                            }
+                            
+                            Text("서버 유지 및 업데이트에 큰 힘이 됩니다. ☕️")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(20)
+                        .liquidGlass()
                     }
-                    
-                    Text("서버 유지 및 업데이트에 큰 힘이 됩니다. ☕️")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(16)
             }
-            .padding(.horizontal, 20)
-            
-            Spacer()
         }
-        .background(Color(.systemGroupedBackground).edgesIgnoringSafeArea(.all))
+        .alert("안내", isPresented: $showBugReportAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("제작자한테 디엠하세요.")
+        }
     }
 }
 
+// 상태 뱃지 (리퀴드)
 struct StatusBadge: View {
     let title: String
     let count: Int
@@ -484,24 +615,25 @@ struct StatusBadge: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(size: 16))
                 .foregroundColor(color)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                 Text("\(count)개 미수행")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .heavy))
                     .foregroundColor(.primary)
             }
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.08))
-        .cornerRadius(10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.2))
+        .cornerRadius(14)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.3), lineWidth: 1))
     }
 }
 
