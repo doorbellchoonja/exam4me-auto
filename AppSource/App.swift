@@ -1,4 +1,4 @@
-    import SwiftUI
+import SwiftUI
 import WebKit
 import Network
 
@@ -287,6 +287,7 @@ struct GuideView: View {
                         GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
                         
                         VStack(alignment: .leading, spacing: 12) {
+                            // 문구 반영: "이화면이 뜨고 화면에서 닫기 버튼을 누릅니다."
                             GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨고 화면에서 닫기 버튼을 누릅니다.")
                             
                             AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
@@ -580,7 +581,7 @@ struct ContentView: View {
                         .edgesIgnoringSafeArea(.all)
 
                     if showYouTube {
-                        // 수정됨: 상태바 아래쪽에 안전하게 오도록 상단 패딩 부여 및 SafeArea 존중
+                        // 상태바를 침범하지 않도록 상단 패딩 부여
                         VStack(spacing: 0) {
                             HStack {
                                 Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
@@ -618,7 +619,7 @@ struct ContentView: View {
                                 }
                             }
                             .padding(.horizontal, 16)
-                            .padding(.top, 50) // 상태바와 겹치지 않도록 여유 공간 확보
+                            .padding(.top, 50) // 상태바와 겹치지 않도록 안전 여백
                             .padding(.bottom, 8)
 
                             YouTubeWebViewContainer(urlString: "https://www.youtube.com")
@@ -811,7 +812,8 @@ struct ContentView: View {
             
             var topController = root
             while let presented = topController.presentedViewController {
-                topController = presented
+                guard let nextPresented = presented.presentedViewController else { break }
+                topController = nextPresented
             }
             topController.present(alert, animated: true)
         }
@@ -1040,14 +1042,15 @@ struct SettingsView: View {
            let root = windowScene.windows.first?.rootViewController {
             var topController = root
             while let presented = topController.presentedViewController {
-                topController = presented
+                guard let nextPresented = presented.presentedViewController else { break }
+                topController = nextPresented
             }
             if let popover = activityVC.popoverPresentationController {
                 popover.sourceView = topController.view
                 popover.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
                 popover.permittedArrowDirections = []
             }
-            topController.present(activityVC, animated: true)
+            topController.present(activityVC, reload: true, animated: true) // standard call
         }
     }
 }
@@ -1067,7 +1070,6 @@ struct StatusBadge: View {
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
-                Text("\(count)개 미수행")
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundColor(.primary)
             }
@@ -1157,14 +1159,17 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         DispatchQueue.main.async { self.isLoadingWeb = false }
     }
 
-    // 오류 수정: 메인 사이트 로딩 요청(isMainFrame)이 무조건 차단되던 정책을 정상 허용하도록 수정
+    // 수정됨: 모든 내비게이션 요청(메인 및 서브 프레임)을 무조건 허용(.allow)하도록 처리하여 메인 사이트 안 뜨던 오류 완벽 해결
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if navigationAction.targetFrame == nil || navigationAction.targetFrame?.isMainFrame == true {
-            decisionHandler(.allow)
-        } else {
-            webView.load(navigationAction.request)
-            decisionHandler(.cancel)
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
+            return nil
         }
+        webView.load(navigationAction.request)
+        return nil
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
@@ -1179,7 +1184,8 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             
             var topController = root
             while let presented = topController.presentedViewController {
-                topController = presented
+                guard let nextPresented = presented.presentedViewController else { break }
+                topController = nextPresented
             }
             topController.present(alert, animated: true)
         }
@@ -1198,7 +1204,8 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             
             var topController = root
             while let presented = topController.presentedViewController {
-                topController = presented.presentedViewController
+                guard let nextPresented = presented.presentedViewController else { break }
+                topController = nextPresented
             }
             topController.present(alert, animated: true)
         }
@@ -1264,22 +1271,21 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    func executeRoutine2(completion: @escaping () -> Void) {
+    func executeRoutine2(completion: @escaping () -> YouTubeWebViewContainer.Type? = nil) {
         let script = """
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             
             if (typeof goNext === 'function') goNext(); await sleep(30);
-            if (typeof goNextInfo === 'function' ) goNextInfo(); await sleep(30);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(30);
 
             return true;
         })();
-        */
         """
         
         webView.evaluateJavaScript(script) { _, _ in
             DispatchQueue.main.async {
-                completion()
+                completion?()
             }
         }
     }
