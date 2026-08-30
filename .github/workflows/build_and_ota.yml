@@ -115,10 +115,8 @@ jobs:
 
           mkdir -p output
           
-          # Unsigned IPA 패키징
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
 
-          # Signed IPA 패키징
           cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
           security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
           /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision.plist > $RUNNER_TEMP/entitlements.plist
@@ -228,6 +226,18 @@ jobs:
                   .btn-primary { background-color: #007aff; color: white; box-shadow: 0 4px 10px rgba(0,122,255,0.25); }
               </style>
               <script>
+                  // 페이지 진입 시점에 이전에 새로고침 플래그가 없으면 즉시 새로고침 강제 실행 (접속할 때마다 무조건 갱신)
+                  window.addEventListener('pageshow', function(event) {
+                      if (!sessionStorage.getItem('refreshed_page')) {
+                          sessionStorage.setItem('refreshed_page', 'true');
+                          window.location.reload();
+                      }
+                  });
+                  // 브라우저를 완전히 닫거나 탭을 나갔다 들어올 때 다시 리프레시될 수 있도록 페이지를 떠날 때 플래그 초기화
+                  window.addEventListener('pagehide', function() {
+                      sessionStorage.removeItem('refreshed_page');
+                  });
+
                   function installApp() {
                       alert('기다렸다가 설치하려고 함 이라고 뜰 것입니다. 거기에서 설치 버튼을 누르고 설정 - 일반 - VPN 및 기기 관리 항목을 누르고 스크롤해서 밑으로 내린 후 기업용 앱 인증서를 클릭하고 신뢰하기 버튼을 눌러주세요.');
                       window.location.href = 'itms-services://?action=download-manifest&url=${BASE_URL}/manifest.plist';
