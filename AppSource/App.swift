@@ -89,7 +89,6 @@ struct OfflineView: View {
     }
 }
 
-// 자동 OTA 업데이트 알림 팝업 뷰
 struct OTAUpdateOverlayView: View {
     let latestVersion: String
     @Binding var isPresented: Bool
@@ -1233,7 +1232,6 @@ struct ContentView: View {
     @State private var testServerDownAlert = false
     @State private var testSlowNetworkAlert = false
 
-    // 앱 진입 시 자동 업데이트 체크를 위한 상태값
     @State private var showAutoUpdateModal = false
     @State private var latestVersionFound = ""
 
@@ -1346,7 +1344,7 @@ struct ContentView: View {
                             }
                         }
 
-                        // 웹뷰 퀵 메뉴바 (미수행 목록 링크에 현재 연도와 월 실시간 반영)
+                        // 웹뷰 퀵 메뉴바 (마이페이지 버튼 제거 및 요청하신 정확한 링크 반영)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 QuickMenuButton(title: "홈", icon: "house.fill") {
@@ -1360,9 +1358,6 @@ struct ContentView: View {
                                     formatter.dateFormat = "yyyy-MM"
                                     let yearMonthStr = formatter.string(from: Date())
                                     vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/hwDoList2.jsp?yearMonth=\(yearMonthStr)&doYn=N")
-                                }
-                                QuickMenuButton(title: "마이페이지", icon: "gearshape.2.fill") {
-                                    vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/myPage.jsp")
                                 }
                             }
                         }
@@ -1679,7 +1674,6 @@ struct ContentView: View {
                 SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
 
-            // 앱 진입 시 자동 업데이트 알림 모달
             if showAutoUpdateModal {
                 OTAUpdateOverlayView(latestVersion: latestVersionFound, isPresented: $showAutoUpdateModal)
             }
@@ -1837,8 +1831,6 @@ struct ContentView: View {
                     }
                 }
             }
-            
-            // 앱 진입 시 자동으로 최신 버전 체크 실행
             checkStartupUpdate()
         }
     }
