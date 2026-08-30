@@ -287,7 +287,6 @@ struct GuideView: View {
                         GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            // 문구 수정: "이화면이 뜨게 합니다" -> "이화면이 뜨고 화면에서 닫기 버튼을 누릅니다."
                             GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨고 화면에서 닫기 버튼을 누릅니다.")
                             
                             AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
@@ -379,7 +378,6 @@ struct ContentView: View {
         ZStack {
             DynamicBackground()
 
-            // 상단 노치/상태표시줄 영역을 침범하지 않도록 안전 영역 내부로 배치
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
                     HStack {
@@ -545,7 +543,6 @@ struct ContentView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }
-            .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) } // 상태표시줄 영역 침범 방지
 
             if isAutomating {
                 Color.black.opacity(0.6)
@@ -583,52 +580,52 @@ struct ContentView: View {
                         .edgesIgnoringSafeArea(.all)
 
                     if showYouTube {
-                        YouTubeWebViewContainer(urlString: "https://www.youtube.com")
-                            .opacity(isYouTubeMinimized ? 0 : 1)
-                            .allowsHitTesting(!isYouTubeMinimized)
-                            .edgesIgnoringSafeArea(.all)
-                    }
+                        // 유튜브 오버레이가 상태표시줄 영역을 침범하지 않도록 안전 영역 내부에 배치
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(Color.black.opacity(0.7))
+                                    .cornerRadius(12)
+                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                
+                                Spacer()
+                                
+                                HStack(spacing: 10) {
+                                    Button(action: {
+                                        withAnimation { isYouTubeMinimized.toggle() }
+                                    }) {
+                                        Image(systemName: isYouTubeMinimized ? "arrow.up.left.and.arrow.down.right" : "minus.rectangle.fill")
+                                            .font(.system(size: 22))
+                                            .foregroundColor(.white)
+                                            .padding(8)
+                                            .background(Color.black.opacity(0.7))
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
 
-                    VStack {
-                        HStack {
-                            Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.black.opacity(0.7))
-                                .cornerRadius(12)
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 1))
-                            
-                            Spacer()
-                            
-                            HStack(spacing: 10) {
-                                Button(action: {
-                                    withAnimation { isYouTubeMinimized.toggle() }
-                                }) {
-                                    Image(systemName: isYouTubeMinimized ? "arrow.up.left.and.arrow.down.right" : "minus.rectangle.fill")
-                                        .font(.system(size: 22))
-                                        .foregroundColor(.white)
-                                        .padding(8)
-                                        .background(Color.black.opacity(0.7))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-
-                                Button(action: {
-                                    showCancelDelayConfirm = true
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 26))
-                                        .foregroundColor(.white)
-                                        .background(Color.black.opacity(0.7))
-                                        .clipShape(Circle())
+                                    Button(action: {
+                                        showCancelDelayConfirm = true
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 26))
+                                            .foregroundColor(.white)
+                                            .background(Color.black.opacity(0.7))
+                                            .clipShape(Circle())
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+
+                            YouTubeWebViewContainer(urlString: "https://www.youtube.com")
+                                .opacity(isYouTubeMinimized ? 0 : 1)
+                                .allowsHitTesting(!isYouTubeMinimized)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        
-                        Spacer()
+                        .edgesIgnoringSafeArea(.bottom)
                     }
 
                     if isYouTubeMinimized || !showYouTube {
@@ -781,7 +778,6 @@ struct ContentView: View {
         remainingSeconds = minutes * 60
         withAnimation { 
             isDelaying = true 
-            // 유튜브 상태를 초기화하지 않고 그대로 유지하도록 수정 (새로 안 뜨게 함)
         }
         UIApplication.shared.isIdleTimerDisabled = true
 
@@ -1086,6 +1082,7 @@ struct StatusBadge: View {
     }
 }
 
+// 웹뷰 내에서 팝업이 안 닫히던 문제를 해결하기 위해 UI, Navigation 델리게이트 완벽 연동
 struct WebViewContainer: UIViewRepresentable {
     @ObservedObject var vm: WebViewModel
     func makeUIView(context: Context) -> WKWebView { vm.webView }
@@ -1162,6 +1159,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         DispatchQueue.main.async { self.isLoadingWeb = false }
     }
 
+    // 팝업창 및 새 창 열기 차단 방지 (원래 웹뷰에서 처리하도록 로드)
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
             return nil
@@ -1170,7 +1168,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         return nil
     }
 
-    // 팝업창 안 닫히는 버그 완전 해결 (새 창이 뜨는 경우 기존 웹뷰에서 바로 로드)
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
             decisionHandler(.allow)
@@ -1180,6 +1177,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
+    // 웹뷰 내부 JS 팝업이 안 닫히던 버그 해결 (UIAlertController 및 Confirm 처리)
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         DispatchQueue.main.async {
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
