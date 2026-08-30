@@ -1008,7 +1008,6 @@ struct SettingsView: View {
                             
                             Divider().background(Color.primary.opacity(0.1))
                             
-                            // 수정 완료: 앱 공유하기 버튼 클릭 시 정상적으로 시스템 공유 창(UIActivityViewController)이 뜨도록 구현
                             Button(action: { shareApp() }) {
                                 HStack {
                                     Text("앱 공유하기")
@@ -1122,7 +1121,6 @@ struct SettingsView: View {
         }
     }
     
-    // 앱 공유하기 동작 오류 수정: Swift UI 내부에서 UIKit의 UIActivityViewController를 안정적으로 띄우도록 뷰 계층 구조 탐색 로직 적용
     private func shareApp() {
         let repoURL = "https://doorbellchoonja.github.io/exam4me-auto"
         guard let url = URL(string: repoURL) else { return }
@@ -1368,11 +1366,11 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         })();
         """
         
-        webView.evaluateJavaScript(script) { _, _ in
+        webView.evaluateJavaScript(script, completionHandler: { _, _ in
             DispatchQueue.main.async {
                 completion()
             }
-        }
+        })
     }
 
     func executeRoutine2(completion: @escaping () -> Void) {
@@ -1387,11 +1385,11 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         })();
         """
         
-        webView.executeJavaScript(script) { _, _ in
+        webView.evaluateJavaScript(script, completionHandler: { _, _ in
             DispatchQueue.main.async {
                 completion()
             }
-        }
+        })
     }
 
     func executeStep04() {
