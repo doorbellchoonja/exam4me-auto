@@ -287,7 +287,6 @@ struct GuideView: View {
                         GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            // 문구 반영: "이화면이 뜨고 화면에서 닫기 버튼을 누릅니다."
                             GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨고 화면에서 닫기 버튼을 누릅니다.")
                             
                             AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
@@ -581,7 +580,6 @@ struct ContentView: View {
                         .edgesIgnoringSafeArea(.all)
 
                     if showYouTube {
-                        // 상태바를 침범하지 않도록 상단 패딩 부여
                         VStack(spacing: 0) {
                             HStack {
                                 Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
@@ -619,7 +617,7 @@ struct ContentView: View {
                                 }
                             }
                             .padding(.horizontal, 16)
-                            .padding(.top, 50) // 상태바와 겹치지 않도록 안전 여백
+                            .padding(.top, 50) // 상태바 아래로 안전하게 내림
                             .padding(.bottom, 8)
 
                             YouTubeWebViewContainer(urlString: "https://www.youtube.com")
@@ -1029,7 +1027,7 @@ struct SettingsView: View {
                 }
             }
         } message: {
-            Text("이 알림을 닫으면 앱 설치 화면이 나옵니다. 사이트에 적혀져있는 앱 버전이 깔려있는 앱 버전보다 높으면 설치했던거처럼 업데이트 하면됨 아 그리고 한번 설치해뒀으니까 신뢰 그거 안눌러도 되고 앱 지우면 다시 설치과정 해야하니까 귀찮으면 지우지마셈 아 그리고 자동화 업데이터는 귀찮아서 안만든거 맞음 ㅇㅇ")
+            Text("이 알림을 닫으면 앱 설치 화면이 나옵니다. 사이트에 적혀져있는 앱 버전이 깔려있는 앱 버전보다 높으면 설치했던거처럼 업데이트 하면됨 아 그리고 한번 설치해뒀으니까 신뢰 그거 안눌러도 되고 앱 지우면 다시 설치과정 해야하니까 귀찮으면 지우지마셈 아 그리고 자동업데이트는 귀찮아서 안만든거 맞음 ㅇㅇ")
         }
     }
     
@@ -1050,7 +1048,7 @@ struct SettingsView: View {
                 popover.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
                 popover.permittedArrowDirections = []
             }
-            topController.present(activityVC, reload: true, animated: true) // standard call
+            topController.present(activityVC, animated: true)
         }
     }
 }
@@ -1070,6 +1068,7 @@ struct StatusBadge: View {
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
+                Text("\(count)개 미수행")
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundColor(.primary)
             }
@@ -1159,7 +1158,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         DispatchQueue.main.async { self.isLoadingWeb = false }
     }
 
-    // 수정됨: 모든 내비게이션 요청(메인 및 서브 프레임)을 무조건 허용(.allow)하도록 처리하여 메인 사이트 안 뜨던 오류 완벽 해결
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         decisionHandler(.allow)
     }
@@ -1271,7 +1269,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    func executeRoutine2(completion: @escaping () -> YouTubeWebViewContainer.Type? = nil) {
+    func executeRoutine2(completion: @escaping () -> Void) {
         let script = """
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -1285,7 +1283,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         
         webView.evaluateJavaScript(script) { _, _ in
             DispatchQueue.main.async {
-                completion?()
+                completion()
             }
         }
     }
