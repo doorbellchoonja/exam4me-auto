@@ -660,6 +660,7 @@ struct ContentView: View {
                 .transition(.opacity)
             }
 
+            // 수정됨: 시간 뻐기기 화면에서 유튜브를 무조건 열지 않고 타이머 화면만 기본으로 띄우며, 상단에 '시간 뻐기기 취소(X)' 버튼을 항상 노출함
             if isDelaying {
                 ZStack {
                     Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.6)
@@ -717,6 +718,21 @@ struct ContentView: View {
 
                     if isYouTubeMinimized || !showYouTube {
                         VStack(spacing: 24) {
+                            // 상단 우측에 항상 노출되는 시간 뻐기기 취소(X) 버튼 바
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    showCancelDelayConfirm = true
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .background(Color.black.opacity(0.4))
+                                        .clipShape(Circle())
+                                }
+                            }
+                            .padding(.horizontal, 8)
+
                             ZStack {
                                 Circle()
                                     .stroke(Color.white.opacity(0.1), lineWidth: 10)
@@ -765,7 +781,7 @@ struct ContentView: View {
                             }) {
                                 HStack {
                                     Image(systemName: "play.rectangle.fill")
-                                    Text(showYouTube ? "유튜브 다시 열기" : "시간뻐기면서 유튜브보기")
+                                    Text("시간뻐기면서 유튜브보기")
                                 }
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(.white)
@@ -777,12 +793,12 @@ struct ContentView: View {
                             }
                             .padding(.top, 10)
                         }
-                        .padding(40)
+                        .padding(30)
                         .background(.ultraThinMaterial)
                         .background(Color.black.opacity(0.3))
                         .cornerRadius(24)
                         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
-                        .padding(30)
+                        .padding(20)
                     }
                 }
                 .transition(.opacity)
@@ -865,6 +881,8 @@ struct ContentView: View {
         remainingSeconds = minutes * 60
         withAnimation { 
             isDelaying = true 
+            showYouTube = false // 유튜브 창을 강제로 열지 않고 타이머 화면만 먼저 띄움
+            isYouTubeMinimized = false
         }
         UIApplication.shared.isIdleTimerDisabled = true
 
@@ -936,7 +954,7 @@ struct SettingsView: View {
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
     @State private var showUpdateAlert = false
-    @State private var showSecretMeaningAlert = false // "이게 뭔가요?" 버튼 알림 제어용 변수
+    @State private var showSecretMeaningAlert = false
     
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     let creatorHash = "MFG9PlaS0OqGqprd52Hj2aRCvViotKNeNR8Rot64EhQ="
@@ -976,7 +994,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
-                        // 제작자 정보 및 "이게 뭔가요?" 버튼 추가 섹션
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "person.badge.key.fill")
@@ -1142,7 +1159,6 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
-        // "이게 뭔가요?" 버튼 클릭 시 요청하신 안내 문구 출력
         .alert("안내", isPresented: $showSecretMeaningAlert) {
             Button("확인", role: .cancel) {}
         } message: {
