@@ -45,7 +45,7 @@ class NetworkMonitor: ObservableObject {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
     @Published var isConnected: Bool = true
-    @Published var connectionType: NWPath.InterfaceType = .other
+    @Published var connectionType: NWInterface.InterfaceType = .other
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
@@ -1882,7 +1882,7 @@ struct ContentView: View {
             }
             checkStartupUpdate()
         }
-        // 자동화 중(`isAutomating == true`)일 때는 네트워크 변경 감지 및 자동 새로고침 무시
+        // 자동화 중(`isAutomating == true`)일 때는 네트워크 변경 감지 및 자동 새로고침을 아예 작동하지 않도록 차단
         .onChange(of: networkMonitor.connectionType) { _ in
             if !isAutomating && networkMonitor.isConnected {
                 vm.webView.reload()
@@ -1980,6 +1980,171 @@ struct ContentView: View {
     }
 }
 
+struct JSExecutionView: View {
+    @ObservedObject var vm: WebViewModel
+    @Binding var customJSInput: String
+    @Binding var showJSSheet: Bool
+    @ObservedObject var macroManager: JSMacroManager
+    
+    @State private var macroNameInput: String = ""
+    @State private var showSaveAlert: Bool = false
+
+    var body: some View {
+        ZStack {
+            DynamicBackground()
+            VStack(spacing: 16) {
+                HStack {
+                    Text("JS 매크로 저장소 & 콘솔")
+                        .font(.system(size: 20, weight: .bold))
+                    Spacer()
+                    Button("닫기") { showJSSheet = false }
+                }
+                
+                TextEditor(text: $customJSInput)
+                    .font(.system(size: 14, design: .monospaced))
+                    .padding(10)
+                    .background(Color.primary.opacity(0.05))
+                    .cornerRadius(12)
+                    .frame(height: 100)
+                
+                HStack(spacing: 10) {
+                    Button(action: {
+                        vm.webView.evaluateJavaScript(customJSInput, completionHandler: nil)
+                        customJSInput = ""
+                    }) {
+                        Text("실행하기")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.accentColor)
+                            .cornerRadius(12)
+                    }
+                    
+                    Button(action: {
+                        if !customJSInput.isEmpty {
+                            showSaveAlert = true
+                        }
+                    }) {
+                        Text("매크로 저장")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.purple)
+                            .cornerRadius(12)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("⭐ 즐겨찾는 매크로 템플릿")
+                        .font(.system(size: 13, weight: .bold))
+                    
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            if macroManager.macros.isEmpty {
+                                Text("저장된 매크로가 없습니다.")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 10)
+                            } else {
+                                ForEach(macroManager.macros) { macro in
+                                    HStack {
+                                        Button(action: {
+                                            customJSInput = macro.code
+                                        }) {
+                                            Text(macro.name)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                        }
+                                        
+                                        Button(action: {
+                                            macroManager.removeMacro(id: macro.id)
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(.red)
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                    .padding(10)
+                                    .background(Color.primary.opacity(0.05))
+                                    .cornerRadius(8)
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: 110)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("💻 웹뷰 개발자 콘솔 & 오류 리포트")
+                            .font(.system(size: 13, weight: .bold))
+                        Spacer()
+                        Button(action: {
+                            let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                            let allLogs = vm.consoleLogs.joined(separator: "\n")
+                            let reportText = "[ExamAuto 오류 리포트]\n- 앱 버전: v\(appVersion)\n- 콘솔 로그:\n\(allLogs.isEmpty ? "기록 없음" : allLogs)"
+                            UIPasteboard.general.string = reportText
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.clipboard")
+                                Text("원클릭 리포트 복사")
+                            }
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                        }
+                    }
+                    
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if vm.consoleLogs.isEmpty {
+                                Text("수집된 콘솔 로그가 없습니다.")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 10)
+                            } else {
+                                ForEach(vm.consoleLogs, id: \.self) { log in
+                                    Text(log)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(log.contains("ERROR") ? .red : (log.contains("WARN") ? .orange : .primary))
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.15))
+                    .cornerRadius(10)
+                    .frame(height: 120)
+                }
+                
+                Spacer()
+            }
+            .padding(20)
+            .alert("매크로 이름 입력", isPresented: $showSaveAlert) {
+                TextField("매크로 이름", text: $macroNameInput)
+                Button("저장") {
+                    if !macroNameInput.isEmpty {
+                        macroManager.addMacro(name: macroNameInput, code: customJSInput)
+                        macroNameInput = ""
+                    }
+                }
+                Button("취소", role: .cancel) {
+                    macroNameInput = ""
+                }
+            } message: {
+                Text("현재 입력된 자바스크립트 코드를 저장할 이름을 입력하세요.")
+            }
+        }
+    }
+}
+
 struct QuickMenuButton: View {
     let title: String
     let icon: String
@@ -2057,7 +2222,6 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
-                        // 학습 통계 및 수행 목표 설정 대시보드
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 Image(systemName: "chart.bar.fill")
