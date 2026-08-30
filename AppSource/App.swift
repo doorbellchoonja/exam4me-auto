@@ -881,7 +881,6 @@ struct ContentView: View {
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
                 
-                // 안내 문구에 저장 후 설정버튼 오른쪽 빨간색 닫기 버튼 안내 덧대기 완료
                 showTopMostAlert(message: "이제 저장해도 좋습니다. 저장하고 나서 설정버튼에서 가장 오른쪽에 있는 빨간색 닫기 버튼을 누르면 미수행학습목록으로 이동합니다.") {
                     vm.executeStep04()
                 }
@@ -1009,6 +1008,7 @@ struct SettingsView: View {
                             
                             Divider().background(Color.primary.opacity(0.1))
                             
+                            // 수정 완료: 앱 공유하기 버튼 클릭 시 정상적으로 시스템 공유 창(UIActivityViewController)이 뜨도록 구현
                             Button(action: { shareApp() }) {
                                 HStack {
                                     Text("앱 공유하기")
@@ -1122,24 +1122,29 @@ struct SettingsView: View {
         }
     }
     
+    // 앱 공유하기 동작 오류 수정: Swift UI 내부에서 UIKit의 UIActivityViewController를 안정적으로 띄우도록 뷰 계층 구조 탐색 로직 적용
     private func shareApp() {
         let repoURL = "https://doorbellchoonja.github.io/exam4me-auto"
         guard let url = URL(string: repoURL) else { return }
-        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let root = windowScene.windows.first?.rootViewController {
-            var topController = root
+        DispatchQueue.main.async {
+            let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootVC = windowScene.windows.first?.rootViewController else { return }
+            
+            var topController = rootVC
             while let presented = topController.presentedViewController {
-                guard let nextPresented = presented.presentedViewController else { break }
-                topController = nextPresented
+                topController = presented
             }
+            
             if let popover = activityVC.popoverPresentationController {
                 popover.sourceView = topController.view
-                popover.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+                popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midY, width: 0, height: 0)
                 popover.permittedArrowDirections = []
             }
-            topController.present(activityVC, animated: true)
+            
+            topController.present(activityVC, animated: true, completion: nil)
         }
     }
 }
@@ -1382,7 +1387,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         })();
         """
         
-        webView.evaluateJavaScript(script) { _, _ in
+        webView.executeJavaScript(script) { _, _ in
             DispatchQueue.main.async {
                 completion()
             }
