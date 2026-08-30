@@ -287,7 +287,8 @@ struct GuideView: View {
                         GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨게 합니다.")
+                            // 문구 수정: "이화면이 뜨게 합니다" -> "이화면이 뜨고 화면에서 닫기 버튼을 누릅니다."
+                            GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨고 화면에서 닫기 버튼을 누릅니다.")
                             
                             AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
                                 switch phase {
@@ -378,6 +379,7 @@ struct ContentView: View {
         ZStack {
             DynamicBackground()
 
+            // 상단 노치/상태표시줄 영역을 침범하지 않도록 안전 영역 내부로 배치
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
                     HStack {
@@ -543,6 +545,7 @@ struct ContentView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }
+            .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) } // 상태표시줄 영역 침범 방지
 
             if isAutomating {
                 Color.black.opacity(0.6)
@@ -599,7 +602,6 @@ struct ContentView: View {
                             
                             Spacer()
                             
-                            // 최소화 / 다시 열기 토글 버튼 및 닫기 버튼
                             HStack(spacing: 10) {
                                 Button(action: {
                                     withAnimation { isYouTubeMinimized.toggle() }
@@ -779,8 +781,7 @@ struct ContentView: View {
         remainingSeconds = minutes * 60
         withAnimation { 
             isDelaying = true 
-            showYouTube = false
-            isYouTubeMinimized = false
+            // 유튜브 상태를 초기화하지 않고 그대로 유지하도록 수정 (새로 안 뜨게 함)
         }
         UIApplication.shared.isIdleTimerDisabled = true
 
@@ -1161,13 +1162,22 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         DispatchQueue.main.async { self.isLoadingWeb = false }
     }
 
-    // 팝업 창 생성 처리 (새창으로 뜨는 링크나 window.open을 기존 웹뷰에 인라인으로 띄워 팝업이 안 닫히는 버그 원인 차단)
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
             return nil
         }
         webView.load(navigationAction.request)
         return nil
+    }
+
+    // 팝업창 안 닫히는 버그 완전 해결 (새 창이 뜨는 경우 기존 웹뷰에서 바로 로드)
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
+            decisionHandler(.allow)
+        } else {
+            webView.load(navigationAction.request)
+            decisionHandler(.cancel)
+        }
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
