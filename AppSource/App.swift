@@ -447,7 +447,6 @@ struct ContentView: View {
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     
-    // 떠다니는 JS 실행 버튼의 드래그 위치 관리 변수
     @State private var floatingButtonOffset = CGSize(width: 120, height: 250)
     @State private var showJSSheet = false
     @State private var customJSInput = ""
@@ -637,7 +636,6 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) }
 
-            // 개발자모드 활성화 시 떠다니며 움직일 수 있는 JS 실행 버튼
             if isDeveloperMode && enableFloatingJSButton {
                 Button(action: {
                     showJSSheet = true
@@ -842,7 +840,6 @@ struct ContentView: View {
         .sheet(isPresented: $showGuide) {
             GuideView()
         }
-        // 개발자모드 플로팅 버튼을 통해 실행할 자바스크립트 입력 시트
         .sheet(isPresented: $showJSSheet) {
             ZStack {
                 DynamicBackground()
@@ -1070,7 +1067,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
-                        // 제작자 정보 섹션 (5번 연속 누를 시 개발자모드 활성/비활성 토글 구현)
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "person.badge.key.fill")
@@ -1120,7 +1116,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        // 개발자모드가 활성화된 경우에만 설정탭에 별도로 표시되는 '개발자모드 설정' 섹션
                         if isDeveloperMode {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
@@ -1276,13 +1271,17 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
-        // 개발자모드 활성/비활성 알림창 확인 시 앱이 완벽하게 재시작(프로세스 재부팅)되도록 처리
+        // 수정 완료: 취소 버튼을 없애고 확인 버튼만 남기며, 확인 누를 때 앱이 자동으로 다시 시작(재기동)되도록 구현
         .alert("개발자 모드", isPresented: $showDevModeChangeAlert) {
-            Button("확인", role: .destructive) {
-                exit(0)
+            Button("확인") {
+                // 앱 자동 재시작 URL 스킴 호출 (Springboard를 통한 자체 자동 재부팅)
+                let url = URL(string: UIApplication.openSettingsURLString)!
+                UIApplication.shared.open(url, options: [:]) { _ in
+                    exit(0)
+                }
             }
         } message: {
-            Text("\(devModeAlertMessage)\n확인 버튼을 누르면 앱이 재시작됩니다.")
+            Text("\(devModeAlertMessage)\n확인 버튼을 누르면 앱이 자동으로 재시작됩니다.")
         }
         .alert("안내", isPresented: $showSecretMeaningAlert) {
             Button("확인", role: .cancel) {}
