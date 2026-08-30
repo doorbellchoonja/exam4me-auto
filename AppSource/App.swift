@@ -384,7 +384,7 @@ struct GuideView: View {
                                 .padding(.leading, 40)
                             }
                             
-                            GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작버튼을 누르고 듣기-학습1순으로 누릅니다. 그리고 '저장에 실패했습니다' 라는 알림창이 뜨면 뒤에 온라인창이 멈추기까지 기다리세요. 온라인창이 멈추면 확인버튼을 누르고 다시 시작버튼-듣기-학습2를 눌러주세요. 그 이후는 알림에 나오는데로 따라 하시면됩니다.")
+                            GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작버튼을 누르고 듣기-학습1순으로 누릅니다. 그리고 '저장에 실패했습니다' 라는 알림창이 뜨면 뒤에 온라인창이 멈추기까지 기다리세요. 온라인창이 멈추면 확인버튼을 누르고 다시 시작버튼-듣기-학습2를 눌러주세요. 그 이후는 안내에 따라 하시면 됩니다.")
                             
                             GuideStep(num: "5", title: "완료", desc: "그 이후는 안내에 따라 하시면 됩니다.")
                         }
@@ -488,7 +488,6 @@ struct GuideStep: View {
     }
 }
 
-// 서버 상태 관리 클래스 (앱 진입 시 서버 접속 여부 확인 및 주기적 체크)
 class ServerStatusManager: ObservableObject {
     @Published var isServerOnline: Bool = true
     @Published var showServerDownAlert: Bool = false
@@ -543,194 +542,203 @@ struct ContentView: View {
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     
+    // 개발자모드 테스트용 토글 상태값 (실제 앱 구동에는 영향 주지 않고 시뮬레이션용)
+    @AppStorage("testOfflineAlert") private var testOfflineAlert = false
+    @AppStorage("testServerDownAlert") private var testServerDownAlert = false
+
     @State private var floatingButtonOffset = CGSize(width: 120, height: 250)
     @State private var showJSSheet = false
     @State private var customJSInput = ""
 
     var body: some View {
         ZStack {
-            DynamicBackground()
+            // 테스트 토글이 켜져있으면 강제로 OfflineView를 띄워 인터넷 연결 해제 알림 테스트 수행
+            if testOfflineAlert {
+                OfflineView()
+            } else {
+                DynamicBackground()
 
-            VStack(spacing: 0) {
-                VStack(spacing: 16) {
-                    HStack(spacing: 6) {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                                vm.loadInitialURL()
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(vm.listeningCount > 0 ? Color.green : Color.orange)
-                                    .frame(width: 7, height: 7)
-                                    .shadow(color: vm.listeningCount > 0 ? .green : .orange, radius: 4)
-                                Text("Exam4me")
-                                    .font(.system(size: 16, weight: .heavy, design: .rounded))
-                                    .foregroundColor(.primary)
-                            }
-                        }
-                        .fixedSize(horizontal: true, vertical: false)
-
-                        Spacer(minLength: 2)
-
+                VStack(spacing: 0) {
+                    VStack(spacing: 16) {
                         HStack(spacing: 6) {
-                            Button(action: { showGuide = true }) {
-                                Image(systemName: "questionmark.circle.fill")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                            }
-                            
-                            Button(action: { showSettings = true }) {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                            }
-
-                            Button(action: { vm.webView.reload() }) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                            }
-
-                            Button(action: { 
-                                if vm.webView.canGoBack {
-                                    vm.webView.goBack() 
+                            Button(action: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                    vm.loadInitialURL()
                                 }
-                            }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                            }
-                            .disabled(!vm.canGoBack)
-
-                            Button(action: {
-                                vm.closePopup()
-                            }) {
-                                Image(systemName: "xmark.circle")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.red)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                            }
-                        }
-                    }
-
-                    HStack(spacing: 12) {
-                        StatusBadge(
-                            title: "Listening",
-                            count: vm.listeningCount,
-                            icon: "headphones",
-                            color: Color.blue
-                        )
-                        StatusBadge(
-                            title: "Vocabulary",
-                            count: vm.vocabCount,
-                            icon: "character.book.closed.fill",
-                            color: Color.purple
-                        )
-                    }
-
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            HStack {
-                                Image(systemName: "doc.text.magnifyingglass")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(size: 15))
-                                TextField("답지 입력...", text: $answerInput)
-                                    .font(.system(size: 14))
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                            .background(Color.primary.opacity(0.05))
-                            .cornerRadius(14)
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-
-                            Button(action: {
-                                hideKeyboard()
-                                showTaskTypeDialog = true
                             }) {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "play.fill")
-                                    Text("시작")
+                                    Circle()
+                                        .fill(vm.listeningCount > 0 ? Color.green : Color.orange)
+                                        .frame(width: 7, height: 7)
+                                        .shadow(color: vm.listeningCount > 0 ? .green : .orange, radius: 4)
+                                    Text("Exam4me")
+                                        .font(.system(size: 16, weight: .heavy, design: .rounded))
+                                        .foregroundColor(.primary)
                                 }
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(
-                                    LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                )
-                                .cornerRadius(14)
-                                .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 3)
                             }
-                            
-                            Button(action: {
-                                hideKeyboard()
-                                showDelayAlert = true
-                            }) {
-                                Image(systemName: "timer")
-                                    .font(.system(size: 16, weight: .bold))
+                            .fixedSize(horizontal: true, vertical: false)
+
+                            Spacer(minLength: 2)
+
+                            HStack(spacing: 6) {
+                                Button(action: { showGuide = true }) {
+                                    Image(systemName: "questionmark.circle.fill")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                }
+                                
+                                Button(action: { showSettings = true }) {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                }
+
+                                Button(action: { vm.webView.reload() }) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                }
+
+                                Button(action: { 
+                                    if vm.webView.canGoBack {
+                                        vm.webView.goBack() 
+                                    }
+                                }) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
+                                        .padding(8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                }
+                                .disabled(!vm.canGoBack)
+
+                                Button(action: {
+                                    vm.closePopup()
+                                }) {
+                                    Image(systemName: "xmark.circle")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.red)
+                                        .padding(8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                }
+                            }
+                        }
+
+                        HStack(spacing: 12) {
+                            StatusBadge(
+                                title: "Listening",
+                                count: vm.listeningCount,
+                                icon: "headphones",
+                                color: Color.blue
+                            )
+                            StatusBadge(
+                                title: "Vocabulary",
+                                count: vm.vocabCount,
+                                icon: "character.book.closed.fill",
+                                color: Color.purple
+                            )
+                        }
+
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                HStack {
+                                    Image(systemName: "doc.text.magnifyingglass")
+                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 15))
+                                    TextField("답지 입력...", text: $answerInput)
+                                        .font(.system(size: 14))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(Color.primary.opacity(0.05))
+                                .cornerRadius(14)
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+
+                                Button(action: {
+                                    hideKeyboard()
+                                    showTaskTypeDialog = true
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "play.fill")
+                                        Text("시작")
+                                    }
+                                    .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
+                                    .padding(.horizontal, 16)
                                     .padding(.vertical, 12)
                                     .background(
-                                        LinearGradient(colors: [Color.orange, Color.pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
                                     )
                                     .cornerRadius(14)
-                                    .shadow(color: Color.orange.opacity(0.4), radius: 6, x: 0, y: 3)
+                                    .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 3)
+                                }
+                                
+                                Button(action: {
+                                    hideKeyboard()
+                                    showDelayAlert = true
+                                }) {
+                                    Image(systemName: "timer")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 12)
+                                        .background(
+                                            LinearGradient(colors: [Color.orange, Color.pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        )
+                                        .cornerRadius(14)
+                                        .shadow(color: Color.orange.opacity(0.4), radius: 6, x: 0, y: 3)
+                                }
                             }
-                        }
-                        
-                        HStack {
-                            Button(action: {
-                                showIdkAnswerAlert = true
-                            }) {
-                                Text("답지를 모르겠나요?")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .underline()
+                            
+                            HStack {
+                                Button(action: {
+                                    showIdkAnswerAlert = true
+                                }) {
+                                    Text("답지를 모르겠나요?")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                        .underline()
+                                }
+                                Spacer()
                             }
-                            Spacer()
+                            .padding(.horizontal, 4)
                         }
-                        .padding(.horizontal, 4)
                     }
-                }
-                .padding(18)
-                .liquidGlass()
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
+                    .padding(18)
+                    .liquidGlass()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
 
-                ZStack {
-                    WebViewContainer(vm: vm)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-                    
-                    if vm.isLoadingWeb {
-                        ZStack {
-                            Color(UIColor.systemBackground).opacity(0.85)
-                            VectorSpinnerView()
+                    ZStack {
+                        WebViewContainer(vm: vm)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                        
+                        if vm.isLoadingWeb {
+                            ZStack {
+                                Color(UIColor.systemBackground).opacity(0.85)
+                                VectorSpinnerView()
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) }
             }
-            .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) }
 
             if isDeveloperMode && enableFloatingJSButton {
                 Button(action: {
@@ -1024,16 +1032,24 @@ struct ContentView: View {
         } message: {
             Text("시간을 그만 뻐기겠습니까?")
         }
-        // 앱 진입 시 서버 상태 체크 후 접속 불가 시 요청하신 문구로 알림 표시
-        .alert("온라인 서버 접속 불가", isPresented: $serverManager.showServerDownAlert) {
+        // 개발자모드 테스트 토글이 켜졌거나 실제 서버 접속 불가 시 알림 표시
+        .alert("온라인 서버 접속 불가", isPresented: Binding(
+            get: { serverManager.showServerDownAlert || testServerDownAlert },
+            set: { newValue in
+                serverManager.showServerDownAlert = newValue
+                testServerDownAlert = newValue
+            }
+        )) {
             Button("확인", role: .cancel) {}
         } message: {
             Text("온라인서버가 접속불가인 상태이기때문에 앱도 온라인서버가 연결잘될때 복구됩니다.")
         }
         .onAppear {
-            serverManager.checkServerStatus { isOnline in
-                if !isOnline {
-                    serverManager.showServerDownAlert = true
+            if !testServerDownAlert {
+                serverManager.checkServerStatus { isOnline in
+                    if !isOnline {
+                        serverManager.showServerDownAlert = true
+                    }
                 }
             }
         }
@@ -1130,6 +1146,10 @@ struct SettingsView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
+    
+    // 개발자모드 테스트용 토글 저장소
+    @AppStorage("testOfflineAlert") private var testOfflineAlert = false
+    @AppStorage("testServerDownAlert") private var testServerDownAlert = false
 
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
@@ -1164,7 +1184,6 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
-                        // 설정탭 내 온라인 서버 상태 표시기 추가
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "server.rack")
@@ -1222,6 +1241,8 @@ struct SettingsView: View {
                                             if isDeveloperMode {
                                                 isDeveloperMode = false
                                                 enableFloatingJSButton = false
+                                                testOfflineAlert = false
+                                                testServerDownAlert = false
                                                 devModeAlertMessage = "개발자모드 비활성화됨"
                                             } else {
                                                 isDeveloperMode = true
@@ -1248,6 +1269,7 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
+                        // 개발자모드 설정 탭에 알림 테스트용 토글 2개 추가
                         if isDeveloperMode {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
@@ -1267,6 +1289,30 @@ struct SettingsView: View {
                                     }
                                 }
                                 .tint(.orange)
+                                
+                                Divider().background(Color.primary.opacity(0.1))
+                                
+                                Toggle(isOn: $testOfflineAlert) {
+                                    HStack {
+                                        Image(systemName: "wifi.slash")
+                                            .foregroundColor(.orange)
+                                        Text("인터넷 연결 해제 알림 테스트")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                                .tint(.orange)
+                                
+                                Divider().background(Color.primary.opacity(0.1))
+                                
+                                Toggle(isOn: $testServerDownAlert) {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.octagon.fill")
+                                            .foregroundColor(.red)
+                                        Text("온라인서버 접속 불가 알림 테스트")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                                .tint(.red)
                             }
                             .padding(20)
                             .liquidGlass()
@@ -1454,261 +1500,5 @@ struct SettingsView: View {
             
             topController.present(activityVC, animated: true, completion: nil)
         }
-    }
-}
-
-struct StatusBadge: View {
-    let title: String
-    let count: Int
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(color)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                Text("\(count)개 미수행")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundColor(.primary)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.05))
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-    }
-}
-
-struct WebViewContainer: UIViewRepresentable {
-    @ObservedObject var vm: WebViewModel
-    func makeUIView(context: Context) -> WKWebView { vm.webView }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-}
-
-class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
-    @Published var listeningCount: Int = 0
-    @Published var vocabCount: Int = 0
-    @Published var canGoBack: Bool = false
-    @Published var isLoadingWeb: Bool = true
-    let webView: WKWebView
-    private var backForwardObserver: NSKeyValueObservation?
-
-    override init() {
-        let prefs = WKPreferences()
-        prefs.javaScriptCanOpenWindowsAutomatically = true
-
-        let config = WKWebViewConfiguration()
-        config.preferences = prefs
-        config.allowsInlineMediaPlayback = true
-        config.defaultWebpagePreferences.allowsContentJavaScript = true
-
-        self.webView = WKWebView(frame: .zero, configuration: config)
-        super.init()
-        self.webView.navigationDelegate = self
-        self.webView.uiDelegate = self 
-        
-        backForwardObserver = self.webView.observe(\.canGoBack, options: .new) { [weak self] webView, _ in
-            DispatchQueue.main.async {
-                self?.canGoBack = webView.canGoBack
-            }
-        }
-        
-        loadInitialURL()
-    }
-
-    deinit {
-        backForwardObserver?.invalidate()
-    }
-
-    func loadInitialURL() {
-        if let url = URL(string: "https://ssdasa.exam4me.com") {
-            self.webView.load(URLRequest(url: url))
-        }
-    }
-
-    func closePopup() {
-        if let url = URL(string: "https://ssdasa.exam4me.com/_student/studentHome2.jsp") {
-            self.webView.load(URLRequest(url: url))
-        }
-    }
-
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        DispatchQueue.main.async { self.isLoadingWeb = true }
-    }
-
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        DispatchQueue.main.async { self.isLoadingWeb = false }
-        
-        let detectScript = """
-        (function() {
-            var text = document.body.innerText;
-            var l = (text.match(/Listening/gi) || []).length;
-            var v = (text.match(/Vocabulary/gi) || []).length;
-            return { listening: l, vocab: v };
-        })();
-        """
-        webView.evaluateJavaScript(detectScript) { [weak self] res, _ in
-            if let dict = res as? [String: Any] {
-                DispatchQueue.main.async {
-                    self?.listeningCount = dict["listening"] as? Int ?? 0
-                    self?.vocabCount = dict["vocab"] as? Int ?? 0
-                }
-            }
-        }
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        DispatchQueue.main.async { self.isLoadingWeb = false }
-    }
-
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        DispatchQueue.main.async { self.isLoadingWeb = false }
-    }
-
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        decisionHandler(.allow)
-    }
-
-    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
-            return nil
-        }
-        webView.load(navigationAction.request)
-        return nil
-    }
-
-    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        DispatchQueue.main.async {
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let root = scene.windows.first?.rootViewController else {
-                completionHandler()
-                return
-            }
-            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler() }))
-            
-            var topController = root
-            while let presented = topController.presentedViewController {
-                guard let nextPresented = presented.presentedViewController else { break }
-                topController = nextPresented
-            }
-            topController.present(alert, animated: true)
-        }
-    }
-
-    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        DispatchQueue.main.async {
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let root = scene.windows.first?.rootViewController else {
-                completionHandler(false)
-                return
-            }
-            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
-            alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
-            
-            var topController = root
-            while let presented = topController.presentedViewController {
-                guard let nextPresented = presented.presentedViewController else { break }
-                topController = nextPresented
-            }
-            topController.present(alert, animated: true)
-        }
-    }
-
-    func executeRoutine1(target: String, answers: [Int], completion: @escaping () -> Void) {
-        let answersJSON = answers.description
-
-        let script = """
-        (async function() {
-            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-            
-            var e = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
-            document.dispatchEvent(e);
-            await sleep(10);
-
-            if (typeof goNext === 'function') goNext(); await sleep(20);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(20);
-            if (typeof goStep01 === 'function') goStep01(); await sleep(30);
-
-            var answers = \(answersJSON);
-            var total = answers.length;
-
-            for (var i = 0; i < total; i++) {
-                var ans = answers[i];
-                
-                if (typeof goStep01_sel === 'function') {
-                    goStep01_sel(i, 2, ans);
-                }
-                await sleep(10);
-
-                if (i < total - 1) {
-                    if (typeof goStep0101_answer === 'function') goStep0101_answer();
-                } else {
-                    if (typeof goStep0101_finish === 'function') goStep0101_finish();
-                }
-                await sleep(20);
-            }
-
-            if (typeof goStep === 'function') goStep('info02'); await sleep(20);
-            if (typeof goStep === 'function') goStep('step0201'); await sleep(20);
-
-            for (var k = 0; k < total - 1; k++) {
-                if (typeof goStep0201_step === 'function') goStep0201_step('next');
-                await sleep(10);
-            }
-
-            if (typeof goStep === 'function') goStep('info03'); await sleep(20);
-            if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
-            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
-
-            location.reload();
-            await sleep(1000);
-
-            return true;
-        })();
-        """
-        
-        webView.evaluateJavaScript(script, completionHandler: { _, _ in
-            DispatchQueue.main.async {
-                completion()
-            }
-        })
-    }
-
-    func executeRoutine2(completion: @escaping () -> Void) {
-        let script = """
-        (async function() {
-            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-            
-            if (typeof goNext === 'function') goNext(); await sleep(30);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(30);
-
-            return true;
-        })();
-        """
-        
-        webView.evaluateJavaScript(script, completionHandler: { _, _ in
-            DispatchQueue.main.async {
-                completion()
-            }
-        })
-    }
-
-    func executeStep04() {
-        let script = """
-        (async function() {
-            if (typeof goStep04 === 'function') goStep04('Y');
-            return true;
-        })();
-        """
-        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 }
