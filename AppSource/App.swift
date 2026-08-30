@@ -146,7 +146,6 @@ struct OTAUpdateOverlayView: View {
                     if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
                         UIApplication.shared.open(otaURL)
                     }
-                    // 업데이트 설치 링크 실행과 동시에 앱 종료
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         exit(0)
                     }
@@ -1978,8 +1977,7 @@ struct SettingsView: View {
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
     @State private var showSecretMeaningAlert = false
-    @State private var latestVersion: String = ""
-    @State private var hasNewUpdate: Bool = false
+    @State private var updateCheckMessage: String = ""
     @State private var isCheckingUpdate: Bool = false
     
     @State private var creatorTapCount = 0
@@ -2271,11 +2269,12 @@ struct SettingsView: View {
                             .liquidGlass()
                         }
                         
+                        // 수동 업데이트 관리 섹션 (이름 변경 및 최신 버전 시 안내 문구 출력)
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                                     .foregroundColor(.blue)
-                                Text("자동 업데이트 관리")
+                                Text("수동 업데이트 관리")
                                     .font(.system(size: 16, weight: .bold))
                                 Spacer()
                             }
@@ -2289,55 +2288,32 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                             
-                            if hasNewUpdate {
-                                HStack {
-                                    Text("최신 버전 발견!")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(.green)
-                                    Spacer()
-                                    Text("v\(latestVersion)")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(.green)
-                                }
-                                
-                                Button(action: {
-                                    let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
-                                    if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
-                                        UIApplication.shared.open(otaURL)
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        exit(0)
-                                    }
-                                }) {
-                                    Text("원클릭 OTA 다이렉트 업데이트")
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 14)
-                                        .background(Color.green)
-                                        .cornerRadius(12)
-                                        .shadow(color: Color.green.opacity(0.3), radius: 5, x: 0, y: 3)
-                                }
-                            } else {
-                                Button(action: {
-                                    checkForUpdates()
-                                }) {
-                                    HStack {
-                                        Text(isCheckingUpdate ? "업데이트 확인 중..." : "업데이트 체크")
-                                            .font(.system(size: 15, weight: .medium))
-                                            .foregroundColor(.primary)
-                                        Spacer()
-                                        if isCheckingUpdate {
-                                            ProgressView()
-                                        } else {
-                                            Image(systemName: "arrow.triangle.2.circlepath")
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                }
-                                .disabled(isCheckingUpdate)
+                            if !updateCheckMessage.isEmpty {
+                                Text(updateCheckMessage)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, 4)
                             }
+                            
+                            Button(action: {
+                                checkForUpdatesManual()
+                            }) {
+                                HStack {
+                                    Text(isCheckingUpdate ? "업데이트 확인 중..." : "업데이트 체크")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if isCheckingUpdate {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .disabled(isCheckingUpdate)
                         }
                         .padding(20)
                         .liquidGlass()
@@ -2467,8 +2443,9 @@ struct SettingsView: View {
         }
     }
     
-    private func checkForUpdates() {
+    private func checkForUpdatesManual() {
         isCheckingUpdate = true
+        updateCheckMessage = ""
         guard let url = URL(string: "https://api.github.com/repos/doorbellchoonja/exam4me-auto/releases/latest") else {
             isCheckingUpdate = false
             return
@@ -2477,18 +2454,31 @@ struct SettingsView: View {
         URLSession.shared.dataTask(with: url) { data, _, error in
             DispatchQueue.main.async {
                 isCheckingUpdate = false
-                guard let data = data, error == nil else { return }
+                guard let data = data, error == nil else {
+                    updateCheckMessage = "업데이트 확인 실패"
+                    return
+                }
                 do {
                     if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
                        let tagName = json["tag_name"] as? String {
                         let cleanTag = tagName.replacingOccurrences(of: "v", with: "")
-                        latestVersion = cleanTag
-                        
-                        if cleanTag != currentAppVersion {
-                            hasNewUpdate = true
+                        if cleanTag == currentAppVersion {
+                            updateCheckMessage = "이미 최신 버전입니다."
+                        } else {
+                            let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
+                            if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
+                                UIApplication.shared.open(otaURL)
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                exit(0)
+                            }
                         }
+                    } else {
+                        updateCheckMessage = "이미 최신 버전입니다."
                     }
-                } catch {}
+                } catch {
+                    updateCheckMessage = "이미 최신 버전입니다."
+                }
             }
         }.resume()
     }
