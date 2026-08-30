@@ -359,7 +359,11 @@ struct ContentView: View {
     @State private var remainingSeconds: Int = 0
     @State private var isDelaying: Bool = false
     @State private var showDelayAlert: Bool = false
-    @State private var showActionTypeDialog: Bool = false
+    
+    // 단계별 다이얼로그 상태 분리 (1단계: 학습 유형 선택, 2단계: 학습시작 1/2 선택)
+    @State private var showTaskTypeDialog: Bool = false
+    @State private var showListeningActionDialog: Bool = false
+    
     @State private var showSettings: Bool = false
     @State private var showGuide: Bool = false
     @State private var showIdkAnswerAlert: Bool = false
@@ -469,7 +473,7 @@ struct ContentView: View {
 
                             Button(action: {
                                 hideKeyboard()
-                                showActionTypeDialog = true
+                                showTaskTypeDialog = true
                             }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "play.fill")
@@ -686,25 +690,31 @@ struct ContentView: View {
         .sheet(isPresented: $showGuide) {
             GuideView()
         }
-        .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showActionTypeDialog, titleVisibility: .visible) {
-            // 학습시작 1과 학습시작 2로 분리
-            Button("🎧 학습시작 1") {
+        // 1단계: 듣기 / 쓰기 선택 팝업
+        .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
+            Button("🎧 듣기 (Listening)") {
+                showListeningActionDialog = true
+            }
+            Button("📝 쓰기 (Vocabulary - 준비중)", role: .cancel) {}
+        }
+        // 2단계: 학습시작 1 / 학습시작 2 선택 팝업
+        .confirmationDialog("듣기 평가 자동화 모드를 선택하세요", isPresented: $showListeningActionDialog, titleVisibility: .visible) {
+            Button("학습시작 1") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
                     withAnimation { isAutomating = true }
                     vm.executeRoutine1(target: target, answers: answers) {
                         withAnimation { isAutomating = false }
-                        showAlert("저장에 실패했습니다.") {
-                            // 확인 버튼 누르면 안내 팝업 혹은 대기
-                        }
+                        // 웹뷰 UI에 가려지지 않도록 최상단 루트 컨트롤러로 네이티브 알림창 출력
+                        showTopMostAlert(message: "저장에 실패했습니다. 확인 버튼을 누르고 학습시작 2를 눌러주세요.")
                     }
                 }
             }
-            Button("🎧 학습시작 2") {
+            Button("학습시작 2") {
                 withAnimation { isAutomating = true }
                 vm.executeRoutine2 {
                     withAnimation { isAutomating = false }
-                    showAlert("이제부터 학습시작2 버튼 오른쪽에 있는 시계모양 시간뻐기기버튼을 눌러서 시간을 뻐기세요.")
+                    showTopMostAlert(message: "이제부터 학습시작2 버튼 오른쪽에 있는 시계모양 시간뻐기기버튼을 눌러서 시간을 뻐기세요.")
                 }
             }
             Button("취소", role: .cancel) {}
@@ -758,27 +768,29 @@ struct ContentView: View {
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
                 
-                // 시간 다 뻐기고 난 후 콜백 및 알림창 닫힌 뒤 goStep04('Y') 실행
-                showAlert("이제 저장해도 좋습니다.") {
+                showTopMostAlert(message: "이제 저장해도 좋습니다.") {
                     vm.executeStep04()
                 }
             }
         }
     }
 
-    private func showAlert(_ msg: String, completion: (() -> Void)? = nil) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.windows.first?.rootViewController else { return }
-        let alert = UIAlertController(title: nil, message: msg, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in
-            completion?()
-        }))
-        
-        var topController = root
-        while let presented = topController.presentedViewController {
-            topController = presented
+    // 웹뷰 위에 가려지지 않고 항상 최상단에서 팝업이 뜨도록 강제하는 함수
+    private func showTopMostAlert(message: String, completion: (() -> Void)? = nil) {
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let root = scene.windows.first?.rootViewController else { return }
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in
+                completion?()
+            }))
+            
+            var topController = root
+            while let presented = topController.presentedViewController {
+                topController = presented
+            }
+            topController.present(alert, animated: true)
         }
-        topController.present(alert, animated: true)
     }
 }
 
@@ -1128,41 +1140,45 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         return nil
     }
 
-    // 팝업창 안 닫히는 오류 수정 (웹뷰 표준 Alert 및 Confirm 핸들러)
+    // 팝업창 안 닫히는 오류 수정 (최상단 루트 컨트롤러 기준으로 네이티브 알림 출력)
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.windows.first?.rootViewController else {
-            completionHandler()
-            return
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let root = scene.windows.first?.rootViewController else {
+                completionHandler()
+                return
+            }
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler() }))
+            
+            var topController = root
+            while let presented = topController.presentedViewController {
+                topController = presented
+            }
+            topController.present(alert, animated: true)
         }
-        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler() }))
-        
-        var topController = root
-        while let presented = topController.presentedViewController {
-            topController = presented
-        }
-        topController.present(alert, animated: true)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.windows.first?.rootViewController else {
-            completionHandler(false)
-            return
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let root = scene.windows.first?.rootViewController else {
+                completionHandler(false)
+                return
+            }
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
+            alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
+            
+            var topController = root
+            while let presented = topController.presentedViewController {
+                topController = presented
+            }
+            topController.present(alert, animated: true)
         }
-        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
-        alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
-        
-        var topController = root
-        while let presented = topController.presentedViewController {
-            topController = presented
-        }
-        topController.present(alert, animated: true)
     }
 
-    // 학습시작 1: 자동화 진행 및 "저장에 실패했습니다" 팝업 처리
+    // 학습시작 1: 자동화 진행 후 마지막에 화면 새로고침(location.reload) 추가
     func executeRoutine1(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
 
@@ -1209,6 +1225,10 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
             if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
 
+            // 마지막 자동화 부분에 화면 새로고침 추가
+            location.reload();
+            await sleep(1000);
+
             return true;
         })();
         """
@@ -1220,17 +1240,14 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 학습시작 2: 새로고침 후 goNext(), goNextInfo() 실행
+    // 학습시작 2: 새로고침 제외하고 goNext(), goNextInfo() 실행
     func executeRoutine2(completion: @escaping () -> Void) {
         let script = """
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             
-            location.reload();
-            await sleep(1500); 
-
-            if (typeof goNext === 'function') goNext(); await sleep(50);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(50);
+            if (typeof goNext === 'function') goNext(); await sleep(30);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(30);
 
             return true;
         })();
