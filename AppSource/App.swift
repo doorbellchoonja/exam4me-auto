@@ -1232,6 +1232,9 @@ struct ContentView: View {
     @State private var isYouTubeMinimized: Bool = false
     @State private var showCancelDelayConfirm: Bool = false
 
+    // 다크 슬립 모드 (미니 화면 보호 모드) 상태값
+    @State private var isDarkSleepMode: Bool = false
+
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     @AppStorage("enableSpeedViewer") private var enableSpeedViewer = false
@@ -1534,6 +1537,38 @@ struct ContentView: View {
                         .background(.ultraThinMaterial)
                         .edgesIgnoringSafeArea(.all)
 
+                    // 다크 슬립 모드 (미니 화면 보호 모드) 활성화 시 화면 어둡게 보호
+                    if isDarkSleepMode {
+                        ZStack {
+                            Color.black.edgesIgnoringSafeArea(.all)
+                            VStack(spacing: 12) {
+                                Image(systemName: "moon.zzz.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.purple)
+                                Text("다크 슬립 모드 작동 중")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.8))
+                                Text("남은 시간: \(remainingSeconds / 60)분 \(remainingSeconds % 60)초")
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(.cyan)
+                                
+                                Button(action: {
+                                    withAnimation { isDarkSleepMode = false }
+                                }) {
+                                    Text("화면 켜기")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(Color.purple.opacity(0.6))
+                                        .cornerRadius(10)
+                                }
+                                .padding(.top, 10)
+                            }
+                        }
+                        .zIndex(10)
+                    }
+
                     if showYouTube {
                         VStack(spacing: 0) {
                             HStack {
@@ -1583,10 +1618,26 @@ struct ContentView: View {
                         }
                     }
 
-                    if isYouTubeMinimized || !showYouTube {
+                    if (isYouTubeMinimized || !showYouTube) && !isDarkSleepMode {
                         VStack(spacing: 24) {
                             HStack {
+                                Button(action: {
+                                    withAnimation { isDarkSleepMode = true }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "moon.zzz")
+                                        Text("다크 슬립 모드")
+                                    }
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.purple.opacity(0.7))
+                                    .cornerRadius(10)
+                                }
+                                
                                 Spacer()
+                                
                                 Button(action: {
                                     showCancelDelayConfirm = true
                                 }) {
@@ -1698,85 +1749,8 @@ struct ContentView: View {
             GuideView()
         }
         .sheet(isPresented: $showJSSheet) {
-            ZStack {
-                DynamicBackground()
-                VStack(spacing: 16) {
-                    HStack {
-                        Text("자바스크립트 실행 & 개발자 콘솔")
-                            .font(.system(size: 20, weight: .bold))
-                        Spacer()
-                        Button("닫기") { showJSSheet = false }
-                    }
-                    
-                    TextEditor(text: $customJSInput)
-                        .font(.system(size: 14, design: .monospaced))
-                        .padding(10)
-                        .background(Color.primary.opacity(0.05))
-                        .cornerRadius(12)
-                        .frame(height: 110)
-                    
-                    Button(action: {
-                        vm.webView.evaluateJavaScript(customJSInput, completionHandler: nil)
-                        customJSInput = ""
-                    }) {
-                        Text("실행하기")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.accentColor)
-                            .cornerRadius(12)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("💻 웹뷰 개발자 콘솔 로그")
-                                .font(.system(size: 13, weight: .bold))
-                            Spacer()
-                            Button(action: {
-                                let allLogs = vm.consoleLogs.joined(separator: "\n")
-                                UIPasteboard.general.string = allLogs
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.on.clipboard")
-                                    Text("콘솔로그 복사")
-                                }
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.purple)
-                                .cornerRadius(8)
-                            }
-                        }
-                        
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 4) {
-                                if vm.consoleLogs.isEmpty {
-                                    Text("수집된 콘솔 로그가 없습니다.")
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .foregroundColor(.secondary)
-                                        .padding(.top, 10)
-                                } else {
-                                    ForEach(vm.consoleLogs, id: \.self) { log in
-                                        Text(log)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(log.contains("ERROR") ? .red : (log.contains("WARN") ? .orange : .primary))
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(10)
-                        .background(Color.black.opacity(0.15))
-                        .cornerRadius(10)
-                        .frame(height: 180)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(20)
-            }
+            // 사용자 커스텀 자바스크립트 스크립트(매크로) 저장소 기능 내장
+            JSExecutionView(vm: vm, customJSInput: $customJSInput, showJSSheet: $showJSSheet)
         }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
@@ -1827,6 +1801,7 @@ struct ContentView: View {
                     isDelaying = false
                     showYouTube = false
                     isYouTubeMinimized = false
+                    isDarkSleepMode = false
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
             }
@@ -1888,7 +1863,9 @@ struct ContentView: View {
             isDelaying = true 
             showYouTube = false
             isYouTubeMinimized = false
+            isDarkSleepMode = false
         }
+        // 시간 뻐기기 중 자동 화면 꺼짐 방지
         UIApplication.shared.isIdleTimerDisabled = true
 
         timer?.invalidate()
@@ -1902,6 +1879,7 @@ struct ContentView: View {
                     isDelaying = false 
                     showYouTube = false
                     isYouTubeMinimized = false
+                    isDarkSleepMode = false
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
                 
@@ -1927,6 +1905,201 @@ struct ContentView: View {
                 topController = nextPresented
             }
             topController.present(alert, animated: true)
+        }
+    }
+}
+
+// 사용자 커스텀 자바스크립트 스크립트(매크로) 저장소 뷰
+struct JSExecutionView: View {
+    @ObservedObject var vm: WebViewModel
+    @Binding var customJSInput: String
+    @Binding var showJSSheet: Bool
+    
+    @AppStorage("savedJSMacros") private var savedMacrosData: String = "[]"
+    @State private var macroNameInput: String = ""
+    @State private var showSaveAlert: Bool = false
+
+    struct JSMacro: Codable, Identifiable, Hashable {
+        var id = UUID()
+        let name: String
+        let code: String
+    }
+
+    var macros: [JSMacro] {
+        get {
+            guard let data = savedMacrosData.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([JSMacro].self, data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if let encoded = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: encoded, encoding: .utf8) {
+                savedMacrosData = jsonString
+            }
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            DynamicBackground()
+            VStack(spacing: 16) {
+                HStack {
+                    Text("JS 매크로 저장소 & 콘솔")
+                        .font(.system(size: 20, weight: .bold))
+                    Spacer()
+                    Button("닫기") { showJSSheet = false }
+                }
+                
+                TextEditor(text: $customJSInput)
+                    .font(.system(size: 14, design: .monospaced))
+                    .padding(10)
+                    .background(Color.primary.opacity(0.05))
+                    .cornerRadius(12)
+                    .frame(height: 100)
+                
+                HStack(spacing: 10) {
+                    Button(action: {
+                        vm.webView.evaluateJavaScript(customJSInput, completionHandler: nil)
+                        customJSInput = ""
+                    }) {
+                        Text("실행하기")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.accentColor)
+                            .cornerRadius(12)
+                    }
+                    
+                    Button(action: {
+                        if !customJSInput.isEmpty {
+                            showSaveAlert = true
+                        }
+                    }) {
+                        Text("매크로 저장")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.purple)
+                            .cornerRadius(12)
+                    }
+                }
+
+                // 저장된 매크로 템플릿 목록 표시
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("⭐ 즐겨찾는 매크로 템플릿")
+                        .font(.system(size: 13, weight: .bold))
+                    
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            if macros.isEmpty {
+                                Text("저장된 매크로가 없습니다.")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 10)
+                            } else {
+                                ForEach(macros) { macro in
+                                    HStack {
+                                        Button(action: {
+                                            customJSInput = macro.code
+                                        }) {
+                                            Text(macro.name)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                        }
+                                        
+                                        Button(action: {
+                                            var current = macros
+                                            current.removeAll { $0.id == macro.id }
+                                            macros = current
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(.red)
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                    .padding(10)
+                                    .background(Color.primary.opacity(0.05))
+                                    .cornerRadius(8)
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: 110)
+                }
+                
+                // 오류 발생 시 원클릭 클립보드 리포트 생성 섹션
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("💻 웹뷰 개발자 콘솔 & 오류 리포트")
+                            .font(.system(size: 13, weight: .bold))
+                        Spacer()
+                        Button(action: {
+                            let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                            let allLogs = vm.consoleLogs.joined(separator: "\n")
+                            let reportText = "[ExamAuto 오류 리포트]\n- 앱 버전: v\(appVersion)\n- 콘솔 로그:\n\(allLogs.isEmpty ? "기록 없음" : allLogs)"
+                            UIPasteboard.general.string = reportText
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.clipboard")
+                                Text("원클릭 리포트 복사")
+                            }
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                        }
+                    }
+                    
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if vm.consoleLogs.isEmpty {
+                                Text("수집된 콘솔 로그가 없습니다.")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 10)
+                            } else {
+                                ForEach(vm.consoleLogs, id: \.self) { log in
+                                    Text(log)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(log.contains("ERROR") ? .red : (log.contains("WARN") ? .orange : .primary))
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.15))
+                    .cornerRadius(10)
+                    .frame(height: 120)
+                }
+                
+                Spacer()
+            }
+            .padding(20)
+            .alert("매크로 이름 입력", isPresented: $showSaveAlert) {
+                TextField("매크로 이름", text: $macroNameInput)
+                Button("저장") {
+                    if !macroNameInput.isEmpty {
+                        let newMacro = JSMacro(name: macroNameInput, code: customJSInput)
+                        var current = macros
+                        current.append(newMacro)
+                        macros = current
+                        macroNameInput = ""
+                    }
+                }
+                Button("취소", role: .cancel) {
+                    macroNameInput = ""
+                }
+            } message: {
+                Text("현재 입력된 자바스크립트 코드를 저장할 이름을 입력하세요.")
+            }
         }
     }
 }
@@ -2269,7 +2442,6 @@ struct SettingsView: View {
                             .liquidGlass()
                         }
                         
-                        // 수동 업데이트 관리 섹션 (이름 변경 및 최신 버전 시 안내 문구 출력)
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
