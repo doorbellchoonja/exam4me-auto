@@ -656,7 +656,6 @@ class ServerStatusManager: ObservableObject {
         }.resume()
     }
     
-    // 0.1초마다 실시간으로 인터넷 속도 측정 및 반영 (기준: 100 KB/s 미만 시 세션당 1회 팝업)
     func startRealtimeSpeedTracking() {
         speedTimer?.invalidate()
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -678,7 +677,6 @@ class ServerStatusManager: ObservableObject {
                             self.currentSpeedText = String(format: "%.1f KB/s", speedKBPerSec)
                         }
                         
-                        // 단 한 번이라도 100 KB/s 미만으로 떨어지면 느림 안내 팝업 노출 (세션당 1회 제한)
                         if speedKBPerSec < 100.0 && !self.hasAlertedSlowNetwork {
                             self.hasAlertedSlowNetwork = true
                             self.isSlowNetwork = true
@@ -764,6 +762,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
     @Published var vocabCount: Int = 0
     @Published var canGoBack: Bool = false
     @Published var isLoadingWeb: Bool = true
+    @Published var consoleLogs: [String] = [] // 개발자 콘솔 로그 저장 배열
     let webView: WKWebView
     private var backForwardObserver: NSKeyValueObservation?
 
@@ -775,6 +774,47 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         config.preferences = prefs
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        // 웹뷰 콘솔 로그 수집을 위한 UserContentController 설정
+        let userContentController = WKUserContentController()
+        let consoleScript = """
+        (function() {
+            var oldLog = console.log;
+            var oldError = console.error;
+            var oldWarn = console.warn;
+            
+            console.log = function(message) {
+                window.webkit.messageHandlers.consoleHandler.postMessage('LOG: ' + Array.from(arguments).join(' '));
+                oldLog.apply(console, arguments);
+            };
+            console.error = function(message) {
+                window.webkit.messageHandlers.consoleHandler.postMessage('ERROR: ' + Array.from(arguments).join(' '));
+                oldError.apply(console, arguments);
+            };
+            console.warn = function(message) {
+                window.webkit.messageHandlers.consoleHandler.postMessage('WARN: ' + Array.from(arguments).join(' '));
+                oldWarn.apply(console, arguments);
+            };
+        })();
+        """
+        let userScript = WKUserScript(source: consoleScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        userContentController.addUserScript(userScript)
+        
+        class ScriptMessageHandler: NSObject, WKScriptMessageHandler {
+            var parent: WebViewModel?
+            init(parent: WebViewModel) { self.parent = parent }
+            func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+                if message.name == "consoleHandler", let body = message.body as? String {
+                    DispatchQueue.main.async {
+                        self.parent?.consoleLogs.append(body)
+                    }
+                }
+            }
+        }
+        
+        let messageHandler = ScriptMessageHandler(parent: self)
+        userContentController.add(messageHandler, name: "consoleHandler")
+        config.userContentController = userContentController
 
         self.webView = WKWebView(frame: .zero, configuration: config)
         super.init()
@@ -1435,19 +1475,14 @@ struct ContentView: View {
                 SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
-        }
-        .sheet(isPresented: $showGuide) {
-            GuideView()
-        }
+        // 자바스크립트 실행 및 웹뷰 개발자 콘솔 뷰어 시트
         .sheet(isPresented: $showJSSheet) {
             ZStack {
                 DynamicBackground()
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     HStack {
-                        Text("자바스크립트 실행")
-                            .font(.system(size: 22, weight: .bold))
+                        Text("자바스크립트 실행 & 개발자 콘솔")
+                            .font(.system(size: 20, weight: .bold))
                         Spacer()
                         Button("닫기") { showJSSheet = false }
                     }
@@ -1457,25 +1492,77 @@ struct ContentView: View {
                         .padding(10)
                         .background(Color.primary.opacity(0.05))
                         .cornerRadius(12)
-                        .frame(height: 150)
+                        .frame(height: 110)
                     
                     Button(action: {
                         vm.webView.evaluateJavaScript(customJSInput, completionHandler: nil)
-                        showJSSheet = false
                         customJSInput = ""
                     }) {
                         Text("실행하기")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 12)
                             .background(Color.blue)
                             .cornerRadius(12)
                     }
+                    
+                    // 웹뷰 개발자 콘솔 로그 뷰어 영역 + 복사 버튼
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("💻 웹뷰 개발자 콘솔 로그")
+                                .font(.system(size: 13, weight: .bold))
+                            Spacer()
+                            Button(action: {
+                                let allLogs = vm.consoleLogs.joined(separator: "\n")
+                                UIPasteboard.general.string = allLogs
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "doc.on.clipboard")
+                                    Text("콘솔로그 복사")
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.purple)
+                                .cornerRadius(8)
+                            }
+                        }
+                        
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 4) {
+                                if vm.consoleLogs.isEmpty {
+                                    Text("수집된 콘솔 로그가 없습니다.")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .padding(.top, 10)
+                                } else {
+                                    ForEach(vm.consoleLogs, id: \.self) { log in
+                                        Text(log)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(log.contains("ERROR") ? .red : (log.contains("WARN") ? .orange : .primary))
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(10)
+                        .background(Color.black.opacity(0.15))
+                        .cornerRadius(10)
+                        .frame(height: 180)
+                    }
+                    
                     Spacer()
                 }
-                .padding(24)
+                .padding(20)
             }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
+        }
+        .sheet(isPresented: $showGuide) {
+            GuideView()
         }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
@@ -1983,7 +2070,7 @@ struct SettingsView: View {
             
             if let popover = activityVC.popoverPresentationController {
                 popover.sourceView = topController.view
-                popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midY, width: 0, height: 0)
+                popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midX, width: 0, height: 0)
                 popover.permittedArrowDirections = []
             }
             
