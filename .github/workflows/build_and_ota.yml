@@ -98,7 +98,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string iPhoneOS" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
 
-          # 앱 아이콘 처리 및 포맷 강제(PNG)
+          # 앱 아이콘 처리
           ICON_SRC=$(find . -maxdepth 3 -name "*Icon*.png" -o -name "image*.png" | head -n 1)
           if [ -n "$ICON_SRC" ]; then
             echo "Processing App Icon from $ICON_SRC"
@@ -115,11 +115,15 @@ jobs:
             /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon60x60" Payload/ExamAuto.app/Info.plist 2>/dev/null || true
           fi
 
-          # 추가 가이드 이미지(image_6.png)를 앱 번들 안에 강제 복사
+          # 추가 가이드 이미지(image_6.png) 및 로딩 JSON 파일 번들 내 포함
           EXTRA_IMG=$(find . -maxdepth 3 -name "image_6.png" | head -n 1)
           if [ -n "$EXTRA_IMG" ]; then
-            echo "Copying extra guide image: $EXTRA_IMG"
             cp "$EXTRA_IMG" Payload/ExamAuto.app/image_6.png
+          fi
+
+          JSON_SRC=$(find . -maxdepth 3 -name "*loading*.json" | head -n 1)
+          if [ -n "$JSON_SRC" ]; then
+            cp "$JSON_SRC" Payload/ExamAuto.app/loading.json
           fi
 
           mkdir -p output
