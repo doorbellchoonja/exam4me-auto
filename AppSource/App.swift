@@ -76,7 +76,6 @@ struct OfflineView: View {
     }
 }
 
-// 인터넷 속도 느림 안내 카드형 팝업 뷰 (개발자 테스트 시에만 블러 터치 허용)
 struct SlowNetworkOverlayView: View {
     @Binding var isPresented: Bool
     var isTestMode: Bool = false
@@ -89,7 +88,6 @@ struct SlowNetworkOverlayView: View {
                 .edgesIgnoringSafeArea(.all)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    // 개발자 설정 테스트 모드일 때만 블러 배경 터치로 닫기 허용
                     if isTestMode {
                         withAnimation {
                             isPresented = false
@@ -154,7 +152,6 @@ struct SlowNetworkOverlayView: View {
     }
 }
 
-// 서버 접속 불가 커스텀 알림 뷰 (개발자 테스트 시에만 블러 터치 허용)
 struct ServerDownOverlayView: View {
     @Binding var isPresented: Bool
     var isTestMode: Bool = false
@@ -167,7 +164,6 @@ struct ServerDownOverlayView: View {
                 .edgesIgnoringSafeArea(.all)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    // 개발자 설정 테스트 모드일 때만 블러 배경 터치로 닫기 허용
                     if isTestMode {
                         withAnimation {
                             isPresented = false
@@ -633,6 +629,9 @@ class ServerStatusManager: ObservableObject {
     @Published var showServerDownAlert: Bool = false
     @Published var isSlowNetwork: Bool = false
     @Published var showSlowNetworkAlert: Bool = false
+    @Published var currentSpeedText: String = "0.0 KB/s"
+    
+    private var speedTimer: Timer?
     
     func checkServerStatus(completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: "https://ssdasa.exam4me.com") else {
@@ -676,6 +675,43 @@ class ServerStatusManager: ObservableObject {
             }
         }
         task.resume()
+    }
+    
+    // 0.5초마다 실시간으로 인터넷 속도 측정 및 업데이트
+    func startRealtimeSpeedTracking() {
+        speedTimer?.invalidate()
+        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self, let url = URL(string: "https://ssdasa.exam4me.com") else { return }
+            let startTime = Date()
+            
+            let task = URLSession.shared.dataTask(with: url) { data, _, error in
+                let elapsedTime = Date().timeIntervalSince(startTime)
+                if let data = data, error == nil, elapsedTime > 0 {
+                    let bytesLoaded = Double(data.count)
+                    let speedBytesPerSec = bytesLoaded / elapsedTime
+                    
+                    DispatchQueue.main.async {
+                        if speedBytesPerSec >= 1024 * 1024 {
+                            let speedMB = speedBytesPerSec / (1024 * 1024)
+                            self.currentSpeedText = String(format: "%.2f MB/s", speedMB)
+                        } else {
+                            let speedKB = speedBytesPerSec / 1024
+                            self.currentSpeedText = String(format: "%.1f KB/s", speedKB)
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.currentSpeedText = "0.0 KB/s"
+                    }
+                }
+            }
+            task.resume()
+        }
+    }
+    
+    func stopRealtimeSpeedTracking() {
+        speedTimer?.invalidate()
+        speedTimer = nil
     }
 }
 
@@ -984,6 +1020,7 @@ struct ContentView: View {
 
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
+    @AppStorage("enableSpeedViewer") private var enableSpeedViewer = false
     
     @State private var testOfflineAlert = false
     @State private var testServerDownAlert = false
@@ -1001,6 +1038,26 @@ struct ContentView: View {
                 DynamicBackground()
 
                 VStack(spacing: 0) {
+                    // 개발자 설정에서 실시간 인터넷 속도 뷰어가 켜져있을 경우 상단에 속도 표시 뱃지 노출
+                    if isDeveloperMode && enableSpeedViewer {
+                        HStack(spacing: 6) {
+                            Image(systemName: "gauge.with.needle.fill")
+                                .foregroundColor(.cyan)
+                            Text("실시간 속도:")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            Text(serverManager.currentSpeedText)
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .liquidGlass()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                    }
+
                     VStack(spacing: 16) {
                         HStack(spacing: 6) {
                             Button(action: {
@@ -1379,20 +1436,16 @@ struct ContentView: View {
                 .transition(.opacity)
             }
 
-            // 실사용 서버 다운 알림 (블러 터치로 안 닫힘)
             if serverManager.showServerDownAlert && !testServerDownAlert {
                 ServerDownOverlayView(isPresented: $serverManager.showServerDownAlert, isTestMode: false)
             }
-            // 개발자 테스트용 서버 다운 알림 (블러 터치로 닫힘 허용)
             if testServerDownAlert {
                 ServerDownOverlayView(isPresented: $testServerDownAlert, isTestMode: true)
             }
 
-            // 실사용 인터넷 느림 알림 (블러 터치로 안 닫힘)
             if serverManager.showSlowNetworkAlert && !testSlowNetworkAlert {
                 SlowNetworkOverlayView(isPresented: $serverManager.showSlowNetworkAlert, isTestMode: false)
             }
-            // 개발자 테스트용 인터넷 느림 알림 (블러 터치로 닫힘 허용)
             if testSlowNetworkAlert {
                 SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
@@ -1502,6 +1555,17 @@ struct ContentView: View {
                     }
                 }
             }
+            // 실시간 속도 뷰어가 활성화되어 있으면 0.5초 단위 트래킹 시작
+            if isDeveloperMode && enableSpeedViewer {
+                serverManager.startRealtimeSpeedTracking()
+            }
+        }
+        .onChange(of: enableSpeedViewer) { newValue in
+            if newValue {
+                serverManager.startRealtimeSpeedTracking()
+            } else {
+                serverManager.stopRealtimeSpeedTracking()
+            }
         }
     }
 
@@ -1576,6 +1640,7 @@ struct SettingsView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
+    @AppStorage("enableSpeedViewer") private var enableSpeedViewer = false
 
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
@@ -1667,6 +1732,7 @@ struct SettingsView: View {
                                             if isDeveloperMode {
                                                 isDeveloperMode = false
                                                 enableFloatingJSButton = false
+                                                enableSpeedViewer = false
                                                 testOfflineAlert = false
                                                 testServerDownAlert = false
                                                 testSlowNetworkAlert = false
@@ -1696,7 +1762,7 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        // 개발자 모드 설정 내 테스트 토글 3개 제공 (블러 터치 시 닫힘은 이 테스트 모드들에서만 작동)
+                        // 개발자 모드 설정 내 실시간 속도 뷰어 및 테스트 토글 제공
                         if isDeveloperMode {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
@@ -1716,6 +1782,18 @@ struct SettingsView: View {
                                     }
                                 }
                                 .tint(.orange)
+                                
+                                Divider().background(Color.primary.opacity(0.1))
+                                
+                                Toggle(isOn: $enableSpeedViewer) {
+                                    HStack {
+                                        Image(systemName: "gauge.with.needle.fill")
+                                            .foregroundColor(.cyan)
+                                        Text("실시간 인터넷 속도 뷰어 추가")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                                .tint(.cyan)
                                 
                                 Divider().background(Color.primary.opacity(0.1))
                                 
