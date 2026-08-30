@@ -187,6 +187,7 @@ struct LoadingView: View {
 
 struct TermsView: View {
     @Binding var hasAgreed: Bool
+    @State private var showFirstGuideAlert = false
 
     var body: some View {
         ZStack {
@@ -220,7 +221,7 @@ struct TermsView: View {
                 
                 VStack(spacing: 16) {
                     Button(action: {
-                        withAnimation { hasAgreed = true }
+                        showFirstGuideAlert = true
                     }) {
                         Text("동의합니다")
                             .font(.system(size: 16, weight: .bold))
@@ -256,19 +257,31 @@ struct TermsView: View {
             .liquidGlass()
             .padding(20)
         }
+        .alert("안내", isPresented: $showFirstGuideAlert) {
+            Button("확인") {
+                withAnimation { hasAgreed = true }
+            }
+        } message: {
+            Text("처음 사용하시네요! 사용법 안부는 설정버튼 옆에 물음표모양 사용법버튼을 눌러주세요.")
+        }
     }
 }
 
 struct GuideView: View {
     @Environment(\.presentationMode) var presentationMode
-    
+    @State private var selectedTab: GuideTab = .listening
+
+    enum GuideTab {
+        case listening, writing
+    }
+
     var body: some View {
         ZStack {
             DynamicBackground()
             
             VStack(spacing: 20) {
                 HStack {
-                    Text("듣기 사용법")
+                    Text("사용법 안내")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                     Spacer()
                     Button(action: { presentationMode.wrappedValue.dismiss() }) {
@@ -279,46 +292,80 @@ struct GuideView: View {
                 }
                 .padding(.top, 24)
                 .padding(.horizontal, 20)
+
+                // 듣기/쓰기 탭 선택 버튼
+                HStack(spacing: 12) {
+                    Button(action: { selectedTab = .listening }) {
+                        Text("🎧 듣기 사용법")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(selectedTab == .listening ? .white : .primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(selectedTab == .listening ? Color.blue : Color.primary.opacity(0.05))
+                            .cornerRadius(12)
+                    }
+
+                    Button(action: { selectedTab = .writing }) {
+                        Text("📝 쓰기 사용법")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(selectedTab == .writing ? .white : .primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(selectedTab == .writing ? Color.purple : Color.primary.opacity(0.05))
+                            .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal, 20)
                 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        GuideStep(num: "1", title: "로그인", desc: "Exam4me 계정으로 로그인합니다.")
-                        
-                        GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨고 화면에서 닫기 버튼을 누릅니다.")
+                    if selectedTab == .listening {
+                        VStack(alignment: .leading, spacing: 24) {
+                            GuideStep(num: "1", title: "로그인", desc: "Exam4me 계정으로 로그인합니다.")
                             
-                            AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, minHeight: 180)
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFit()
-                                        .cornerRadius(12)
-                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-                                case .failure(_):
-                                    Text("이미지를 불러올 수 없습니다.")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                @unknown default:
-                                    EmptyView()
+                            GuideStep(num: "2", title: "답지 붙여넣기", desc: "시작할 듣기의 답지를 텍스트 그대로 복사하여 입력칸에 붙여넣습니다.")
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                GuideStep(num: "3", title: "학습시작", desc: "밑에 사이트에서 학습시작을 눌러서 이화면이 뜨고 화면에서 닫기 버튼을 누릅니다.")
+                                
+                                AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607170.jpg/file_607170.jpg")) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        ProgressView()
+                                            .frame(maxWidth: .infinity, minHeight: 180)
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFit()
+                                            .cornerRadius(12)
+                                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                                    case .failure(_):
+                                        Text("이미지를 불러올 수 없습니다.")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    @unknown default:
+                                        EmptyView()
+                                    }
                                 }
+                                .padding(.leading, 40)
                             }
-                            .padding(.leading, 40)
+                            
+                            GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작버튼을 누르고 듣기-학습1순으로 누릅니다. 그리고 '저장에 실패했습니다' 라는 알림창이 뜨면 뒤에 온라인창이 멈추기까지 기다리세요. 온라인창이 멈추면 확인버튼을 누르고 다시 시작버튼-듣기-학습2를 눌러주세요. 그 이후는 알림에 나오는데로 따라 하시면됩니다.")
+                            
+                            GuideStep(num: "5", title: "완료", desc: "그 이후는 안내에 따라 하시면 됩니다.")
                         }
-                        
-                        GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작 버튼을 누릅니다.")
-                        
-                        GuideStep(num: "5", title: "완료", desc: "그이후는 안내에따라 하시면 됩니다.")
+                        .padding(20)
+                        .liquidGlass()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
+                    } else {
+                        VStack(alignment: .leading, spacing: 24) {
+                            GuideStep(num: "1", title: "쓰기 사용법 준비중", desc: "쓰기/단어 자동화 기능은 추후 업데이트될 예정입니다.")
+                        }
+                        .padding(20)
+                        .liquidGlass()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
                     }
-                    .padding(20)
-                    .liquidGlass()
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
                 }
             }
         }
@@ -381,14 +428,19 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
                     HStack {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(vm.listeningCount > 0 ? Color.green : Color.orange)
-                                .frame(width: 8, height: 8)
-                                .shadow(color: vm.listeningCount > 0 ? .green : .orange, radius: 4)
-                            Text("Exam4me")
-                                .font(.system(size: 18, weight: .heavy, design: .rounded))
-                                .foregroundColor(.primary)
+                        // Exam4me 글자 누르면 처음 웹뷰 사이트로 이동
+                        Button(action: {
+                            vm.loadInitialURL()
+                        }) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(vm.listeningCount > 0 ? Color.green : Color.orange)
+                                    .frame(width: 8, height: 8)
+                                    .shadow(color: vm.listeningCount > 0 ? .green : .orange, radius: 4)
+                                Text("Exam4me")
+                                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                                    .foregroundColor(.primary)
+                            }
                         }
 
                         Spacer()
@@ -421,6 +473,7 @@ struct ContentView: View {
                                     .clipShape(Circle())
                             }
 
+                            // 뒤로가기 버튼
                             Button(action: { 
                                 if vm.webView.canGoBack {
                                     vm.webView.goBack() 
@@ -438,6 +491,22 @@ struct ContentView: View {
                                 .cornerRadius(20)
                             }
                             .disabled(!vm.canGoBack)
+
+                            // 팝업창 닫기 버튼 (뒤로가기 버튼 오른쪽)
+                            Button(action: {
+                                vm.closePopup()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "xmark.circle")
+                                    Text("팝업닫기")
+                                }
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(20)
+                            }
                         }
                     }
 
@@ -543,6 +612,7 @@ struct ContentView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }
+            .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) }
 
             if isAutomating {
                 Color.black.opacity(0.6)
@@ -617,7 +687,7 @@ struct ContentView: View {
                                 }
                             }
                             .padding(.horizontal, 16)
-                            .padding(.top, 50) // 상태바 아래로 안전하게 내림
+                            .padding(.top, 50)
                             .padding(.bottom, 8)
 
                             YouTubeWebViewContainer(urlString: "https://www.youtube.com")
@@ -718,7 +788,7 @@ struct ContentView: View {
                     withAnimation { isAutomating = true }
                     vm.executeRoutine1(target: target, answers: answers) {
                         withAnimation { isAutomating = false }
-                        showTopMostAlert(message: "저장에 실패했습니다. 확인 버튼을 누르고 학습시작 2를 눌러주세요.")
+                        showTopMostAlert(message: "저장에 실패했습니다.")
                     }
                 }
             }
@@ -843,10 +913,10 @@ struct YouTubeWebViewContainer: UIViewRepresentable {
 
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
+    @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
     @State private var showUpdateAlert = false
-    @AppStorage("isDarkMode") private var isDarkMode = false
     
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
 
@@ -1015,6 +1085,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .preferredColorScheme(isDarkMode ? .dark : .light) // 설정탭 오픈 시에도 즉시 다크모드 적용 반영
         .alert("안내", isPresented: $showBugReportAlert) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -1116,13 +1187,39 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             }
         }
         
+        loadInitialURL()
+    }
+
+    deinit {
+        backForwardObserver?.invalidate()
+    }
+
+    // Exam4me 글자 누를 때 처음 사이트로 이동하는 메서드
+    func loadInitialURL() {
         if let url = URL(string: "https://ssdasa.exam4me.com") {
             self.webView.load(URLRequest(url: url))
         }
     }
 
-    deinit {
-        backForwardObserver?.invalidate()
+    // 팝업창 닫기 버튼 동작 메서드
+    func closePopup() {
+        let closeScript = """
+        (function() {
+            // 레이어 팝업이나 모달 닫기 버튼 공통 처리 (클래스나 아이디 기반 닫기 및 스타일 숨김)
+            var closeBtns = document.querySelectorAll('.close, .pop_close, [class*="close"], [id*="close"]');
+            for(var i=0; i<closeBtns.length; i++) {
+                closeBtns[i].click();
+            }
+            var popups = document.querySelectorAll('.popup, .modal, .layer_popup, [class*="popup"]');
+            for(var j=0; j<popups.length; j++) {
+                popups[j].style.display = 'none';
+            }
+        })();
+        """
+        webView.evaluateJavaScript(closeScript, completionHandler: nil)
+        if webView.canGoBack {
+            webView.goBack()
+        }
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
