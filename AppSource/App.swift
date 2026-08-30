@@ -76,9 +76,10 @@ struct OfflineView: View {
     }
 }
 
-// 서버 접속 불가 커스텀 알림 뷰 (인터넷 해제 알림과 완벽히 동일한 디자인 적용 및 바깥 터치 시 닫힘)
-struct ServerDownOverlayView: View {
+// 인터넷 속도 느림 안내 카드형 팝업 뷰 (개발자 테스트 시에만 블러 터치 허용)
+struct SlowNetworkOverlayView: View {
     @Binding var isPresented: Bool
+    var isTestMode: Bool = false
     @State private var isAnimating = false
 
     var body: some View {
@@ -88,8 +89,89 @@ struct ServerDownOverlayView: View {
                 .edgesIgnoringSafeArea(.all)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation {
-                        isPresented = false
+                    // 개발자 설정 테스트 모드일 때만 블러 배경 터치로 닫기 허용
+                    if isTestMode {
+                        withAnimation {
+                            isPresented = false
+                        }
+                    }
+                }
+            
+            VStack(spacing: 24) {
+                Image(systemName: "tortoise.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+                    .scaleEffect(isAnimating ? 1.1 : 0.9)
+                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isAnimating)
+                    .onAppear { isAnimating = true }
+                
+                VStack(spacing: 8) {
+                    Text("인터넷 속도 느림 안내")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Text("현재 사용하시는 기기의 인터넷 속도가 느립니다.\n듣기/쓰기를 하실때 사이트로딩이 느리면 자동화중에 오류가 발생할 수 있습니다.\n그래도 계속하시겠습니까?")
+                        .font(.system(size: 14, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
+                }
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        exit(0)
+                    }) {
+                        Text("나가기")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red.opacity(0.3), lineWidth: 1))
+                    }
+                    
+                    Button(action: {
+                        withAnimation {
+                            isPresented = false
+                        }
+                    }) {
+                        Text("확인")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.blue)
+                            .cornerRadius(12)
+                            .shadow(color: Color.blue.opacity(0.3), radius: 5, x: 0, y: 3)
+                    }
+                }
+            }
+            .padding(32)
+            .liquidGlass()
+            .padding(24)
+        }
+    }
+}
+
+// 서버 접속 불가 커스텀 알림 뷰 (개발자 테스트 시에만 블러 터치 허용)
+struct ServerDownOverlayView: View {
+    @Binding var isPresented: Bool
+    var isTestMode: Bool = false
+    @State private var isAnimating = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .background(.ultraThinMaterial)
+                .edgesIgnoringSafeArea(.all)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // 개발자 설정 테스트 모드일 때만 블러 배경 터치로 닫기 허용
+                    if isTestMode {
+                        withAnimation {
+                            isPresented = false
+                        }
                     }
                 }
             
@@ -207,7 +289,6 @@ struct VectorSpinnerView: View {
     }
 }
 
-// 앱 전체 로딩 및 웹뷰 로딩에서 공통으로 쓰이는 동일한 로딩 애니메이션 뷰
 struct LoadingView: View {
     @Binding var isLoading: Bool
     @State private var isAnimating = false
@@ -550,6 +631,8 @@ struct GuideStep: View {
 class ServerStatusManager: ObservableObject {
     @Published var isServerOnline: Bool = true
     @Published var showServerDownAlert: Bool = false
+    @Published var isSlowNetwork: Bool = false
+    @Published var showSlowNetworkAlert: Bool = false
     
     func checkServerStatus(completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: "https://ssdasa.exam4me.com") else {
@@ -571,6 +654,28 @@ class ServerStatusManager: ObservableObject {
                 completion(isOnline)
             }
         }.resume()
+    }
+    
+    func measureNetworkSpeed() {
+        guard let url = URL(string: "https://ssdasa.exam4me.com") else { return }
+        let startTime = Date()
+        
+        let task = URLSession.shared.dataTask(with: url) { data, _, error in
+            let elapsedTime = Date().timeIntervalSince(startTime)
+            if let data = data, error == nil, elapsedTime > 0 {
+                let bytesLoaded = Double(data.count)
+                let speedBytesPerSec = bytesLoaded / elapsedTime
+                let speedMBPerSec = speedBytesPerSec / (1024 * 1024)
+                
+                if speedMBPerSec < 1.0 {
+                    DispatchQueue.main.async {
+                        self.isSlowNetwork = true
+                        self.showSlowNetworkAlert = true
+                    }
+                }
+            }
+        }
+        task.resume()
     }
 }
 
@@ -603,7 +708,6 @@ struct StatusBadge: View {
     }
 }
 
-// 웹뷰 로딩 시에도 앱 전체 로딩과 동일한 LoadingView를 표시하도록 수정
 struct WebViewContainer: UIViewRepresentable {
     @ObservedObject var vm: WebViewModel
     func makeUIView(context: Context) -> WKWebView { vm.webView }
@@ -883,6 +987,7 @@ struct ContentView: View {
     
     @State private var testOfflineAlert = false
     @State private var testServerDownAlert = false
+    @State private var testSlowNetworkAlert = false
 
     @State private var floatingButtonOffset = CGSize(width: 120, height: 250)
     @State private var showJSSheet = false
@@ -892,12 +997,6 @@ struct ContentView: View {
         ZStack {
             if testOfflineAlert {
                 OfflineView()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation {
-                            testOfflineAlert = false
-                        }
-                    }
             } else {
                 DynamicBackground()
 
@@ -1072,7 +1171,6 @@ struct ContentView: View {
                             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
                         
                         if vm.isLoadingWeb {
-                            // 웹뷰 로딩 시에도 동일한 로딩 애니메이션 뷰 표시
                             LoadingView(isLoading: .constant(true))
                                 .clipShape(RoundedRectangle(cornerRadius: 20))
                         }
@@ -1281,19 +1379,26 @@ struct ContentView: View {
                 .transition(.opacity)
             }
 
-            // 서버 접속 불가 시 인터넷 해제 알림과 동일한 디자인의 커스텀 오버레이 뷰 표시
-            if serverManager.showServerDownAlert || testServerDownAlert {
-                ServerDownOverlayView(isPresented: Binding(
-                    get: { serverManager.showServerDownAlert || testServerDownAlert },
-                    set: { newValue in
-                        serverManager.showServerDownAlert = newValue
-                        testServerDownAlert = newValue
-                    }
-                ))
+            // 실사용 서버 다운 알림 (블러 터치로 안 닫힘)
+            if serverManager.showServerDownAlert && !testServerDownAlert {
+                ServerDownOverlayView(isPresented: $serverManager.showServerDownAlert, isTestMode: false)
+            }
+            // 개발자 테스트용 서버 다운 알림 (블러 터치로 닫힘 허용)
+            if testServerDownAlert {
+                ServerDownOverlayView(isPresented: $testServerDownAlert, isTestMode: true)
+            }
+
+            // 실사용 인터넷 느림 알림 (블러 터치로 안 닫힘)
+            if serverManager.showSlowNetworkAlert && !testSlowNetworkAlert {
+                SlowNetworkOverlayView(isPresented: $serverManager.showSlowNetworkAlert, isTestMode: false)
+            }
+            // 개발자 테스트용 인터넷 느림 알림 (블러 터치로 닫힘 허용)
+            if testSlowNetworkAlert {
+                SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert)
+            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
         }
         .sheet(isPresented: $showGuide) {
             GuideView()
@@ -1387,6 +1492,9 @@ struct ContentView: View {
             Text("시간을 그만 뻐기겠습니까?")
         }
         .onAppear {
+            if !testSlowNetworkAlert {
+                serverManager.measureNetworkSpeed()
+            }
             if !testServerDownAlert {
                 serverManager.checkServerStatus { isOnline in
                     if !isOnline {
@@ -1463,6 +1571,7 @@ struct SettingsView: View {
     @ObservedObject var serverManager: ServerStatusManager
     @Binding var testOfflineAlert: Bool
     @Binding var testServerDownAlert: Bool
+    @Binding var testSlowNetworkAlert: Bool
     
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
@@ -1560,6 +1669,7 @@ struct SettingsView: View {
                                                 enableFloatingJSButton = false
                                                 testOfflineAlert = false
                                                 testServerDownAlert = false
+                                                testSlowNetworkAlert = false
                                                 devModeAlertMessage = "개발자모드 비활성화됨"
                                             } else {
                                                 isDeveloperMode = true
@@ -1586,6 +1696,7 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
+                        // 개발자 모드 설정 내 테스트 토글 3개 제공 (블러 터치 시 닫힘은 이 테스트 모드들에서만 작동)
                         if isDeveloperMode {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
@@ -1629,6 +1740,18 @@ struct SettingsView: View {
                                     }
                                 }
                                 .tint(.red)
+                                
+                                Divider().background(Color.primary.opacity(0.1))
+                                
+                                Toggle(isOn: $testSlowNetworkAlert) {
+                                    HStack {
+                                        Image(systemName: "tortoise.fill")
+                                            .foregroundColor(.orange)
+                                        Text("인터넷 속도 느림 안내 테스트")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                                .tint(.orange)
                             }
                             .padding(20)
                             .liquidGlass()
