@@ -2198,6 +2198,9 @@ struct SettingsView: View {
     @State private var showDevModeChangeAlert = false
     @State private var devModeAlertMessage = ""
 
+    // 업데이트 예정이력 6번 연속 터치 이스터에그를 위한 카운트 상태값
+    @State private var updateHistoryTapCount = 0
+
     let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     let creatorHash = "MFG9PlaS0OqGqprd52Hj2aRCvViotKNeNR8Rot64EhQ="
 
@@ -2592,12 +2595,23 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
+                        // 업데이트 예정이력 (6번 누르면 이스터에그 영상 링크 오픈)
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "sparkles")
                                     .foregroundColor(.purple)
                                 Text("업데이트 예정이력")
                                     .font(.system(size: 16, weight: .bold))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        updateHistoryTapCount += 1
+                                        if updateHistoryTapCount >= 6 {
+                                            updateHistoryTapCount = 0
+                                            if let videoURL = URL(string: "https://cdn.mtdv.me/video/rick.mp4") {
+                                                UIApplication.shared.open(videoURL)
+                                            }
+                                        }
+                                    }
                                 Spacer()
                             }
                             Text("곧 쓰기자동화도 넣을예정입니다.")
