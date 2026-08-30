@@ -444,6 +444,14 @@ struct ContentView: View {
     @State private var isYouTubeMinimized: Bool = false
     @State private var showCancelDelayConfirm: Bool = false
 
+    @AppStorage("isDeveloperMode") private var isDeveloperMode = false
+    @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
+    
+    // 떠다니는 JS 실행 버튼의 드래그 위치 관리 변수
+    @State private var floatingButtonOffset = CGSize(width: 120, height: 250)
+    @State private var showJSSheet = false
+    @State private var customJSInput = ""
+
     var body: some View {
         ZStack {
             DynamicBackground()
@@ -629,6 +637,32 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) }
 
+            // 개발자모드 활성화 시 떠다니며 움직일 수 있는 JS 실행 버튼
+            if isDeveloperMode && enableFloatingJSButton {
+                Button(action: {
+                    showJSSheet = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        Text("JS실행")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(20)
+                    .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+                .offset(floatingButtonOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            floatingButtonOffset = value.translation
+                        }
+                )
+            }
+
             if isAutomating {
                 ZStack {
                     Color.black.opacity(0.65)
@@ -660,7 +694,6 @@ struct ContentView: View {
                 .transition(.opacity)
             }
 
-            // 수정됨: 시간 뻐기기 화면에서 유튜브를 무조건 열지 않고 타이머 화면만 기본으로 띄우며, 상단에 '시간 뻐기기 취소(X)' 버튼을 항상 노출함
             if isDelaying {
                 ZStack {
                     Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.6)
@@ -718,7 +751,6 @@ struct ContentView: View {
 
                     if isYouTubeMinimized || !showYouTube {
                         VStack(spacing: 24) {
-                            // 상단 우측에 항상 노출되는 시간 뻐기기 취소(X) 버튼 바
                             HStack {
                                 Spacer()
                                 Button(action: {
@@ -810,6 +842,43 @@ struct ContentView: View {
         .sheet(isPresented: $showGuide) {
             GuideView()
         }
+        // 개발자모드 플로팅 버튼을 통해 실행할 자바스크립트 입력 시트
+        .sheet(isPresented: $showJSSheet) {
+            ZStack {
+                DynamicBackground()
+                VStack(spacing: 20) {
+                    HStack {
+                        Text("자바스크립트 실행")
+                            .font(.system(size: 22, weight: .bold))
+                        Spacer()
+                        Button("닫기") { showJSSheet = false }
+                    }
+                    
+                    TextEditor(text: $customJSInput)
+                        .font(.system(size: 14, design: .monospaced))
+                        .padding(10)
+                        .background(Color.primary.opacity(0.05))
+                        .cornerRadius(12)
+                        .frame(height: 150)
+                    
+                    Button(action: {
+                        vm.webView.evaluateJavaScript(customJSInput, completionHandler: nil)
+                        showJSSheet = false
+                        customJSInput = ""
+                    }) {
+                        Text("실행하기")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.blue)
+                            .cornerRadius(12)
+                    }
+                    Spacer()
+                }
+                .padding(24)
+            }
+        }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
                 showListeningActionDialog = true
@@ -881,7 +950,7 @@ struct ContentView: View {
         remainingSeconds = minutes * 60
         withAnimation { 
             isDelaying = true 
-            showYouTube = false // 유튜브 창을 강제로 열지 않고 타이머 화면만 먼저 띄움
+            showYouTube = false
             isYouTubeMinimized = false
         }
         UIApplication.shared.isIdleTimerDisabled = true
@@ -951,11 +1020,18 @@ struct YouTubeWebViewContainer: UIViewRepresentable {
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("isDeveloperMode") private var isDeveloperMode = false
+    @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
+
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
     @State private var showUpdateAlert = false
     @State private var showSecretMeaningAlert = false
     
+    @State private var creatorTapCount = 0
+    @State private var showDevModeChangeAlert = false
+    @State private var devModeAlertMessage = ""
+
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     let creatorHash = "MFG9PlaS0OqGqprd52Hj2aRCvViotKNeNR8Rot64EhQ="
 
@@ -994,6 +1070,7 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
+                        // 제작자 정보 섹션 (5번 연속 누를 시 개발자모드 활성/비활성 토글 구현)
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "person.badge.key.fill")
@@ -1010,6 +1087,21 @@ struct SettingsView: View {
                                     .lineLimit(2)
                                     .minimumScaleFactor(0.8)
                                     .textSelection(.enabled)
+                                    .onTapGesture {
+                                        creatorTapCount += 1
+                                        if creatorTapCount >= 5 {
+                                            creatorTapCount = 0
+                                            if isDeveloperMode {
+                                                isDeveloperMode = false
+                                                enableFloatingJSButton = false
+                                                devModeAlertMessage = "개발자모드 비활성화됨"
+                                            } else {
+                                                isDeveloperMode = true
+                                                devModeAlertMessage = "개발자모드 활성화됨"
+                                            }
+                                            showDevModeChangeAlert = true
+                                        }
+                                    }
                                 
                                 Button(action: {
                                     showSecretMeaningAlert = true
@@ -1027,6 +1119,31 @@ struct SettingsView: View {
                         }
                         .padding(20)
                         .liquidGlass()
+
+                        // 개발자모드가 활성화된 경우에만 설정탭에 별도로 표시되는 '개발자모드 설정' 섹션
+                        if isDeveloperMode {
+                            VStack(alignment: .leading, spacing: 16) {
+                                HStack {
+                                    Image(systemName: "hammer.fill")
+                                        .foregroundColor(.orange)
+                                    Text("개발자모드 설정")
+                                        .font(.system(size: 16, weight: .bold))
+                                    Spacer()
+                                }
+                                
+                                Toggle(isOn: $enableFloatingJSButton) {
+                                    HStack {
+                                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                                            .foregroundColor(.blue)
+                                        Text("자바스크립트 실행버튼 추가")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                                .tint(.orange)
+                            }
+                            .padding(20)
+                            .liquidGlass()
+                        }
                         
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
@@ -1159,6 +1276,14 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        // 개발자모드 활성/비활성 알림창 확인 시 앱이 완벽하게 재시작(프로세스 재부팅)되도록 처리
+        .alert("개발자 모드", isPresented: $showDevModeChangeAlert) {
+            Button("확인", role: .destructive) {
+                exit(0)
+            }
+        } message: {
+            Text("\(devModeAlertMessage)\n확인 버튼을 누르면 앱이 재시작됩니다.")
+        }
         .alert("안내", isPresented: $showSecretMeaningAlert) {
             Button("확인", role: .cancel) {}
         } message: {
