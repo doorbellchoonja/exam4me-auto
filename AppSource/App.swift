@@ -22,7 +22,7 @@ struct Exam4meApp: App {
                 } else if isLoading {
                     LoadingView(isLoading: $isLoading)
                 } else {
-                    ContentView()
+                    ContentView(networkMonitor: networkMonitor)
                 }
             }
             .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
@@ -45,11 +45,20 @@ class NetworkMonitor: ObservableObject {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
     @Published var isConnected: Bool = true
+    @Published var connectionType: NWPath.InterfaceType = .other
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async {
                 self?.isConnected = (path.status == .satisfied)
+                
+                if path.usesInterfaceType(.wifi) {
+                    self?.connectionType = .wifi
+                } else if path.usesInterfaceType(.cellular) {
+                    self?.connectionType = .cellular
+                } else {
+                    self?.connectionType = .other
+                }
             }
         }
         monitor.start(queue: queue)
@@ -833,6 +842,9 @@ class StudyStatsManager: ObservableObject {
     @AppStorage("todayWritingCount") var todayWritingCount: Int = 0
     @AppStorage("todayStudySeconds") var todayStudySeconds: Int = 0
     @AppStorage("lastRecordDate") var lastRecordDate: String = ""
+    
+    @AppStorage("targetListeningCount") var targetListeningCount: Int = 5
+    @AppStorage("targetWritingCount") var targetWritingCount: Int = 5
 
     init() {
         checkAndResetDailyStats()
@@ -877,6 +889,16 @@ class StudyStatsManager: ObservableObject {
         } else {
             return String(format: "%d초", seconds)
         }
+    }
+    
+    var listeningProgress: Double {
+        guard targetListeningCount > 0 else { return 0 }
+        return min(Double(todayListeningCount) / Double(targetListeningCount), 1.0)
+    }
+
+    var writingProgress: Double {
+        guard targetWritingCount > 0 else { return 0 }
+        return min(Double(todayWritingCount) / Double(targetWritingCount), 1.0)
     }
 }
 
@@ -1248,6 +1270,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 }
 
 struct ContentView: View {
+    @ObservedObject var networkMonitor: NetworkMonitor
     @StateObject private var vm = WebViewModel()
     @StateObject private var serverManager = ServerStatusManager()
     @StateObject private var statsManager = StudyStatsManager()
@@ -1859,6 +1882,17 @@ struct ContentView: View {
             }
             checkStartupUpdate()
         }
+        // 자동화 중(`isAutomating == true`)일 때는 네트워크 변경 감지 및 자동 새로고침 무시
+        .onChange(of: networkMonitor.connectionType) { _ in
+            if !isAutomating && networkMonitor.isConnected {
+                vm.webView.reload()
+            }
+        }
+        .onChange(of: networkMonitor.isConnected) { isConnected in
+            if !isAutomating && isConnected {
+                vm.webView.reload()
+            }
+        }
     }
 
     private func checkStartupUpdate() {
@@ -1946,171 +1980,6 @@ struct ContentView: View {
     }
 }
 
-struct JSExecutionView: View {
-    @ObservedObject var vm: WebViewModel
-    @Binding var customJSInput: String
-    @Binding var showJSSheet: Bool
-    @ObservedObject var macroManager: JSMacroManager
-    
-    @State private var macroNameInput: String = ""
-    @State private var showSaveAlert: Bool = false
-
-    var body: some View {
-        ZStack {
-            DynamicBackground()
-            VStack(spacing: 16) {
-                HStack {
-                    Text("JS 매크로 저장소 & 콘솔")
-                        .font(.system(size: 20, weight: .bold))
-                    Spacer()
-                    Button("닫기") { showJSSheet = false }
-                }
-                
-                TextEditor(text: $customJSInput)
-                    .font(.system(size: 14, design: .monospaced))
-                    .padding(10)
-                    .background(Color.primary.opacity(0.05))
-                    .cornerRadius(12)
-                    .frame(height: 100)
-                
-                HStack(spacing: 10) {
-                    Button(action: {
-                        vm.webView.evaluateJavaScript(customJSInput, completionHandler: nil)
-                        customJSInput = ""
-                    }) {
-                        Text("실행하기")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.accentColor)
-                            .cornerRadius(12)
-                    }
-                    
-                    Button(action: {
-                        if !customJSInput.isEmpty {
-                            showSaveAlert = true
-                        }
-                    }) {
-                        Text("매크로 저장")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.purple)
-                            .cornerRadius(12)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("⭐ 즐겨찾는 매크로 템플릿")
-                        .font(.system(size: 13, weight: .bold))
-                    
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            if macroManager.macros.isEmpty {
-                                Text("저장된 매크로가 없습니다.")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 10)
-                            } else {
-                                ForEach(macroManager.macros) { macro in
-                                    HStack {
-                                        Button(action: {
-                                            customJSInput = macro.code
-                                        }) {
-                                            Text(macro.name)
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(.primary)
-                                            Spacer()
-                                        }
-                                        
-                                        Button(action: {
-                                            macroManager.removeMacro(id: macro.id)
-                                        }) {
-                                            Image(systemName: "trash")
-                                                .foregroundColor(.red)
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                    .padding(10)
-                                    .background(Color.primary.opacity(0.05))
-                                    .cornerRadius(8)
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: 110)
-                }
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("💻 웹뷰 개발자 콘솔 & 오류 리포트")
-                            .font(.system(size: 13, weight: .bold))
-                        Spacer()
-                        Button(action: {
-                            let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-                            let allLogs = vm.consoleLogs.joined(separator: "\n")
-                            let reportText = "[ExamAuto 오류 리포트]\n- 앱 버전: v\(appVersion)\n- 콘솔 로그:\n\(allLogs.isEmpty ? "기록 없음" : allLogs)"
-                            UIPasteboard.general.string = reportText
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.on.clipboard")
-                                Text("원클릭 리포트 복사")
-                            }
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.blue)
-                            .cornerRadius(8)
-                        }
-                    }
-                    
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
-                            if vm.consoleLogs.isEmpty {
-                                Text("수집된 콘솔 로그가 없습니다.")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 10)
-                            } else {
-                                ForEach(vm.consoleLogs, id: \.self) { log in
-                                    Text(log)
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(log.contains("ERROR") ? .red : (log.contains("WARN") ? .orange : .primary))
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(10)
-                    .background(Color.black.opacity(0.15))
-                    .cornerRadius(10)
-                    .frame(height: 120)
-                }
-                
-                Spacer()
-            }
-            .padding(20)
-            .alert("매크로 이름 입력", isPresented: $showSaveAlert) {
-                TextField("매크로 이름", text: $macroNameInput)
-                Button("저장") {
-                    if !macroNameInput.isEmpty {
-                        macroManager.addMacro(name: macroNameInput, code: customJSInput)
-                        macroNameInput = ""
-                    }
-                }
-                Button("취소", role: .cancel) {
-                    macroNameInput = ""
-                }
-            } message: {
-                Text("현재 입력된 자바스크립트 코드를 저장할 이름을 입력하세요.")
-            }
-        }
-    }
-}
-
 struct QuickMenuButton: View {
     let title: String
     let icon: String
@@ -2188,56 +2057,57 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
+                        // 학습 통계 및 수행 목표 설정 대시보드
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 Image(systemName: "chart.bar.fill")
                                     .foregroundColor(.accentColor)
-                                Text("오늘의 학습 통계 대시보드")
+                                Text("학습 통계 및 수행 목표 설정")
                                     .font(.system(size: 16, weight: .bold))
                                 Spacer()
                             }
                             
+                            VStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text("듣기 달성률 (\(statsManager.todayListeningCount)/\(statsManager.targetListeningCount)회)")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                    ProgressView(value: statsManager.listeningProgress)
+                                        .accentColor(.blue)
+                                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text("쓰기 달성률 (\(statsManager.todayWritingCount)/\(statsManager.targetWritingCount)회)")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                    ProgressView(value: statsManager.writingProgress)
+                                        .accentColor(.purple)
+                                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
+                                }
+                            }
+                            
                             HStack(spacing: 12) {
-                                VStack(spacing: 6) {
-                                    Text("듣기 완료")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(.secondary)
-                                    Text("\(statsManager.todayListeningCount)회")
-                                        .font(.system(size: 18, weight: .heavy))
-                                        .foregroundColor(.primary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.primary.opacity(0.05))
-                                .cornerRadius(12)
-                                
-                                VStack(spacing: 6) {
-                                    Text("쓰기 완료")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(.secondary)
-                                    Text("\(statsManager.todayWritingCount)회")
-                                        .font(.system(size: 18, weight: .heavy))
-                                        .foregroundColor(.primary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.primary.opacity(0.05))
-                                .cornerRadius(12)
-                                
-                                VStack(spacing: 6) {
+                                VStack(spacing: 4) {
                                     Text("총 학습 시간")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(size: 11, weight: .semibold))
                                         .foregroundColor(.secondary)
                                     Text(statsManager.formattedStudyTime)
-                                        .font(.system(size: 15, weight: .heavy))
+                                        .font(.system(size: 14, weight: .heavy))
                                         .foregroundColor(.primary)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.7)
                                 }
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 10)
                                 .background(Color.primary.opacity(0.05))
-                                .cornerRadius(12)
+                                .cornerRadius(10)
                             }
                         }
                         .padding(20)
@@ -2315,7 +2185,7 @@ struct SettingsView: View {
                             HStack {
                                 Image(systemName: "person.badge.key.fill")
                                     .foregroundColor(.purple)
-                                Text("제작자 정보")
+                                Text("제작자 정보 (Face ID 보안)")
                                     .font(.system(size: 16, weight: .bold))
                                 Spacer()
                             }
@@ -2332,7 +2202,6 @@ struct SettingsView: View {
                                         if creatorTapCount >= 5 {
                                             creatorTapCount = 0
                                             if isDeveloperMode {
-                                                // 개발자 모드 해제 시 생체 인증
                                                 authenticateWithFaceID { success in
                                                     if success {
                                                         isDeveloperMode = false
@@ -2347,7 +2216,6 @@ struct SettingsView: View {
                                                     }
                                                 }
                                             } else {
-                                                // 개발자 모드 활성화 시 Face ID 2차 필수 인증
                                                 authenticateWithFaceID { success in
                                                     if success {
                                                         isDeveloperMode = true
@@ -2381,7 +2249,7 @@ struct SettingsView: View {
                                 HStack {
                                     Image(systemName: "hammer.fill")
                                         .foregroundColor(.orange)
-                                    Text("개발자모드 설정")
+                                    Text("개발자모드 설정 (Face ID 연동)")
                                         .font(.system(size: 16, weight: .bold))
                                     Spacer()
                                 }
@@ -2397,7 +2265,7 @@ struct SettingsView: View {
                                     HStack {
                                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                                             .foregroundColor(.blue)
-                                        Text("자바스크립트 실행버튼 추가 (FaceID 보호)")
+                                        Text("자바스크립트 실행버튼 추가")
                                             .font(.system(size: 15, weight: .semibold))
                                     }
                                 }
@@ -2647,20 +2515,18 @@ struct SettingsView: View {
         }
     }
     
-    // Face ID / Touch ID 생체 2차 인증 함수
     private func authenticateWithFaceID(completion: @escaping (Bool) -> Void) {
         let context = LAContext()
         var error: NSError?
 
         if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
             let reason = "개발자 설정을 변경하려면 Face ID 또는 기기 암호 인증이 필요합니다."
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, authenticationError in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, _ in
                 DispatchQueue.main.async {
                     completion(success)
                 }
             }
         } else {
-            // 생체 인식을 지원하지 않거나 설정되지 않은 기기의 경우 기본 암호 인증 fallback
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "개발자 설정 변경을 위해 기기 암호 인증이 필요합니다.") { success, _ in
                 DispatchQueue.main.async {
                     completion(success)
