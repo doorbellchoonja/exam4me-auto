@@ -125,6 +125,7 @@ struct DynamicBackground: View {
     }
 }
 
+// loading 2_2.json 벡터 데이터를 정밀 구현한 고성능 스피너
 struct VectorSpinnerView: View {
     @State private var isRotating = false
     @State private var trimEnd: CGFloat = 0.1
@@ -136,18 +137,18 @@ struct VectorSpinnerView: View {
                 .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 11, lineCap: .round))
                 .frame(width: 90, height: 90)
                 .rotationEffect(.degrees(isRotating ? 360 : 0))
-                .animation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false), value: isRotating)
+                .animation(Animation.linear(duration: 1.2).repeatForever(autoreverses: false), value: isRotating)
             
             Circle()
                 .trim(from: 0, to: 0.6)
                 .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.4), style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .frame(width: 65, height: 65)
                 .rotationEffect(.degrees(isRotating ? -360 : 0))
-                .animation(Animation.linear(duration: 2.0).repeatForever(autoreverses: false), value: isRotating)
+                .animation(Animation.linear(duration: 1.6).repeatForever(autoreverses: false), value: isRotating)
         }
         .onAppear {
             isRotating = true
-            withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+            withAnimation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                 trimEnd = 0.75
             }
         }
@@ -175,7 +176,7 @@ struct LoadingView: View {
         .onAppear {
             let randomTime = Double.random(in: 3.0...5.0)
             DispatchQueue.main.asyncAfter(deadline: .now() + randomTime) {
-                withAnimation(.easeInOut(duration: 0.6)) {
+                withAnimation(.easeInOut(duration: 0.5)) {
                     isLoading = false
                 }
             }
@@ -1108,7 +1109,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         topController.present(alert, animated: true)
     }
 
-    // 속도를 대폭 최적화한 자동화 루프 스크립트 (딜레이 대폭 축소)
+    // 초고속으로 압축된 자동화 스크립트
     func executeRoutine(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
 
@@ -1118,11 +1119,11 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             
             var e = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
             document.dispatchEvent(e);
-            await sleep(200);
+            await sleep(100);
 
-            if (typeof goNext === 'function') goNext(); await sleep(300);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(300);
-            if (typeof goStep01 === 'function') goStep01(); await sleep(400);
+            if (typeof goNext === 'function') goNext(); await sleep(200);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(200);
+            if (typeof goStep01 === 'function') goStep01(); await sleep(300);
 
             var answers = \(answersJSON);
             var total = answers.length;
@@ -1133,32 +1134,32 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 if (typeof goStep01_sel === 'function') {
                     goStep01_sel(i, 2, ans);
                 }
-                await sleep(200);
+                await sleep(100);
 
                 if (i < total - 1) {
                     if (typeof goStep0101_answer === 'function') goStep0101_answer();
                 } else {
                     if (typeof goStep0101_finish === 'function') goStep0101_finish();
                 }
-                await sleep(300);
-            }
-
-            if (typeof goStep === 'function') goStep('info02'); await sleep(300);
-            if (typeof goStep === 'function') goStep('step0201'); await sleep(300);
-
-            for (var k = 0; k < total - 1; k++) {
-                if (typeof goStep0201_step === 'function') goStep0201_step('next');
                 await sleep(200);
             }
 
-            if (typeof goStep === 'function') goStep('info03'); await sleep(300);
-            if (typeof goStep0301 === 'function') goStep0301(); await sleep(300);
-            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(300);
+            if (typeof goStep === 'function') goStep('info02'); await sleep(200);
+            if (typeof goStep === 'function') goStep('step0201'); await sleep(200);
+
+            for (var k = 0; k < total - 1; k++) {
+                if (typeof goStep0201_step === 'function') goStep0201_step('next');
+                await sleep(100);
+            }
+
+            if (typeof goStep === 'function') goStep('info03'); await sleep(200);
+            if (typeof goStep0301 === 'function') goStep0301(); await sleep(200);
+            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(200);
 
             location.reload();
-            await sleep(1000); 
-            if (typeof goNext === 'function') goNext(); await sleep(300);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(300);
+            await sleep(800); 
+            if (typeof goNext === 'function') goNext(); await sleep(200);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(200);
             
             alert('지금부터 학습시작 버튼 옆의 시계모양 시간 채우기 버튼을 눌러서 시간을 채울수 있습니다.');
 
