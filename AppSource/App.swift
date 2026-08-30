@@ -55,12 +55,25 @@ class NetworkMonitor: ObservableObject {
     }
 }
 
+// 인터넷 연결 해제 뷰 (테스트 모드일 때만 블러 배경 터치 시 닫힘 허용)
 struct OfflineView: View {
+    var isTestMode: Bool = false
+    var onClose: (() -> Void)? = nil
     @State private var isAnimating = false
 
     var body: some View {
         ZStack {
-            DynamicBackground()
+            if isTestMode {
+                Color.black.opacity(0.4)
+                    .background(.ultraThinMaterial)
+                    .edgesIgnoringSafeArea(.all)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onClose?()
+                    }
+            } else {
+                DynamicBackground()
+            }
             
             VStack(spacing: 24) {
                 Image(systemName: "wifi.slash")
@@ -89,9 +102,11 @@ struct OfflineView: View {
     }
 }
 
+// 자동 OTA 업데이트 알림 팝업 (나중에 하기 버튼 제거, 테스트 모드 시 블러 터치 닫기 지원)
 struct OTAUpdateOverlayView: View {
     let latestVersion: String
     @Binding var isPresented: Bool
+    var isTestMode: Bool = false
     @State private var isAnimating = false
 
     var body: some View {
@@ -99,6 +114,14 @@ struct OTAUpdateOverlayView: View {
             Color.black.opacity(0.4)
                 .background(.ultraThinMaterial)
                 .edgesIgnoringSafeArea(.all)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isTestMode {
+                        withAnimation {
+                            isPresented = false
+                        }
+                    }
+                }
             
             VStack(spacing: 24) {
                 Image(systemName: "arrow.down.circle.fill")
@@ -120,36 +143,20 @@ struct OTAUpdateOverlayView: View {
                         .lineSpacing(4)
                 }
                 
-                HStack(spacing: 12) {
-                    Button(action: {
-                        withAnimation {
-                            isPresented = false
-                        }
-                    }) {
-                        Text("나중에 하기")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.primary.opacity(0.05))
-                            .cornerRadius(12)
+                Button(action: {
+                    let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
+                    if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
+                        UIApplication.shared.open(otaURL)
                     }
-                    
-                    Button(action: {
-                        let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
-                        if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
-                            UIApplication.shared.open(otaURL)
-                        }
-                    }) {
-                        Text("업데이트 설치")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.green)
-                            .cornerRadius(12)
-                            .shadow(color: Color.green.opacity(0.3), radius: 5, x: 0, y: 3)
-                    }
+                }) {
+                    Text("업데이트 설치")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.green)
+                        .cornerRadius(12)
+                        .shadow(color: Color.green.opacity(0.3), radius: 5, x: 0, y: 3)
                 }
             }
             .padding(32)
@@ -1231,6 +1238,7 @@ struct ContentView: View {
     @State private var testOfflineAlert = false
     @State private var testServerDownAlert = false
     @State private var testSlowNetworkAlert = false
+    @State private var testAutoUpdateAlert = false
 
     @State private var showAutoUpdateModal = false
     @State private var latestVersionFound = ""
@@ -1242,7 +1250,9 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if testOfflineAlert {
-                OfflineView()
+                OfflineView(isTestMode: true, onClose: {
+                    withAnimation { testOfflineAlert = false }
+                })
             } else {
                 DynamicBackground()
 
@@ -1344,7 +1354,6 @@ struct ContentView: View {
                             }
                         }
 
-                        // 웹뷰 퀵 메뉴바 (마이페이지 버튼 제거 및 요청하신 정확한 링크 반영)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 QuickMenuButton(title: "홈", icon: "house.fill") {
@@ -1674,12 +1683,15 @@ struct ContentView: View {
                 SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
 
-            if showAutoUpdateModal {
-                OTAUpdateOverlayView(latestVersion: latestVersionFound, isPresented: $showAutoUpdateModal)
+            if showAutoUpdateModal && !testAutoUpdateAlert {
+                OTAUpdateOverlayView(latestVersion: latestVersionFound, isPresented: $showAutoUpdateModal, isTestMode: false)
+            }
+            if testAutoUpdateAlert {
+                OTAUpdateOverlayView(latestVersion: "9.9.9", isPresented: $testAutoUpdateAlert, isTestMode: true)
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(serverManager: serverManager, statsManager: statsManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
+            SettingsView(serverManager: serverManager, statsManager: statsManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert, testAutoUpdateAlert: $testAutoUpdateAlert)
         }
         .sheet(isPresented: $showGuide) {
             GuideView()
@@ -1952,6 +1964,7 @@ struct SettingsView: View {
     @Binding var testOfflineAlert: Bool
     @Binding var testServerDownAlert: Bool
     @Binding var testSlowNetworkAlert: Bool
+    @Binding var testAutoUpdateAlert: Bool
     
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("useSystemTheme") private var useSystemTheme = true
@@ -2145,6 +2158,7 @@ struct SettingsView: View {
                                                 testOfflineAlert = false
                                                 testServerDownAlert = false
                                                 testSlowNetworkAlert = false
+                                                testAutoUpdateAlert = false
                                                 devModeAlertMessage = "개발자모드 비활성화됨"
                                             } else {
                                                 isDeveloperMode = true
@@ -2238,6 +2252,19 @@ struct SettingsView: View {
                                     }
                                 }
                                 .tint(.orange)
+
+                                Divider().background(Color.primary.opacity(0.1))
+                                
+                                // 앱 자동 업데이트 안내 테스트 토글 추가
+                                Toggle(isOn: $testAutoUpdateAlert) {
+                                    HStack {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("앱 자동 업데이트 안내 테스트")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                                .tint(.green)
                             }
                             .padding(20)
                             .liquidGlass()
