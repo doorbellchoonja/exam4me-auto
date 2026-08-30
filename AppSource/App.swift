@@ -488,8 +488,38 @@ struct GuideStep: View {
     }
 }
 
+// 서버 상태 관리 클래스 (앱 진입 시 서버 접속 여부 확인 및 주기적 체크)
+class ServerStatusManager: ObservableObject {
+    @Published var isServerOnline: Bool = true
+    @Published var showServerDownAlert: Bool = false
+    
+    func checkServerStatus(completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "https://ssdasa.exam4me.com") else {
+            DispatchQueue.main.async {
+                self.isServerOnline = false
+                completion(false)
+            }
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 5.0
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let isOnline = (error == nil && (response as? HTTPURLResponse)?.statusCode ?? 500 < 500)
+            DispatchQueue.main.async {
+                self.isServerOnline = isOnline
+                completion(isOnline)
+            }
+        }.resume()
+    }
+}
+
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
+    @StateObject private var serverManager = ServerStatusManager()
+    
     @State private var answerInput: String = ""
     @State private var delayMinutes: Int = 10
     @State private var remainingSeconds: Int = 0
@@ -901,7 +931,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView(serverManager: serverManager)
         }
         .sheet(isPresented: $showGuide) {
             GuideView()
@@ -994,6 +1024,19 @@ struct ContentView: View {
         } message: {
             Text("시간을 그만 뻐기겠습니까?")
         }
+        // 앱 진입 시 서버 상태 체크 후 접속 불가 시 요청하신 문구로 알림 표시
+        .alert("온라인 서버 접속 불가", isPresented: $serverManager.showServerDownAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("온라인서버가 접속불가인 상태이기때문에 앱도 온라인서버가 연결잘될때 복구됩니다.")
+        }
+        .onAppear {
+            serverManager.checkServerStatus { isOnline in
+                if !isOnline {
+                    serverManager.showServerDownAlert = true
+                }
+            }
+        }
     }
 
     private func hideKeyboard() {
@@ -1082,6 +1125,8 @@ struct YouTubeWebViewContainer: UIViewRepresentable {
 
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var serverManager: ServerStatusManager
+    
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
@@ -1119,6 +1164,27 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
+                        // 설정탭 내 온라인 서버 상태 표시기 추가
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "server.rack")
+                                    .foregroundColor(serverManager.isServerOnline ? .green : .red)
+                                Text("온라인 서버 상태")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(serverManager.isServerOnline ? Color.green : Color.red)
+                                        .frame(width: 8, height: 8)
+                                    Text(serverManager.isServerOnline ? "정상 연결됨" : "접속 불가")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(serverManager.isServerOnline ? .green : .red)
+                                }
+                            }
+                        }
+                        .padding(20)
+                        .liquidGlass()
+
                         VStack {
                             Toggle(isOn: $isDarkMode) {
                                 HStack {
@@ -1337,7 +1403,6 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
-        // 수정 완료: 오류의 원인이 되었던 외부 뷰 호출을 제거하고, 순수하게 앱 루트 상태값을 초기화하여 깔끔하게 재기동되도록 수정
         .alert("개발자 모드", isPresented: $showDevModeChangeAlert) {
             Button("확인") {
                 exit(0)
