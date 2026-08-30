@@ -664,9 +664,10 @@ class ServerStatusManager: ObservableObject {
             if let data = data, error == nil, elapsedTime > 0 {
                 let bytesLoaded = Double(data.count)
                 let speedBytesPerSec = bytesLoaded / elapsedTime
-                let speedMBPerSec = speedBytesPerSec / (1024 * 1024)
+                let speedKBPerSec = speedBytesPerSec / 1024
                 
-                if speedMBPerSec < 1.0 {
+                // 기준을 100 KB/s 미만으로 변경
+                if speedKBPerSec < 100.0 {
                     DispatchQueue.main.async {
                         self.isSlowNetwork = true
                         self.showSlowNetworkAlert = true
@@ -677,10 +678,10 @@ class ServerStatusManager: ObservableObject {
         task.resume()
     }
     
-    // 0.5초마다 실시간으로 인터넷 속도 측정 및 업데이트
+    // 0.1초마다 실시간으로 인터넷 속도 측정 및 반영
     func startRealtimeSpeedTracking() {
         speedTimer?.invalidate()
-        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        speedTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self = self, let url = URL(string: "https://ssdasa.exam4me.com") else { return }
             let startTime = Date()
             
@@ -1038,7 +1039,6 @@ struct ContentView: View {
                 DynamicBackground()
 
                 VStack(spacing: 0) {
-                    // 개발자 설정에서 실시간 인터넷 속도 뷰어가 켜져있을 경우 상단에 속도 표시 뱃지 노출
                     if isDeveloperMode && enableSpeedViewer {
                         HStack(spacing: 6) {
                             Image(systemName: "gauge.with.needle.fill")
@@ -1555,7 +1555,6 @@ struct ContentView: View {
                     }
                 }
             }
-            // 실시간 속도 뷰어가 활성화되어 있으면 0.5초 단위 트래킹 시작
             if isDeveloperMode && enableSpeedViewer {
                 serverManager.startRealtimeSpeedTracking()
             }
@@ -1762,7 +1761,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        // 개발자 모드 설정 내 실시간 속도 뷰어 및 테스트 토글 제공
                         if isDeveloperMode {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
