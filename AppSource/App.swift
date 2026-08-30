@@ -1271,13 +1271,12 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
-        // 수정 완료: 취소 버튼을 없애고 확인 버튼만 남기며, 확인 누를 때 앱이 자동으로 다시 시작(재기동)되도록 구현
+        // 수정 완료: 시스템 설정창으로 튕기는 문제를 해결하고 앱이 깔끔하게 재기동되도록 수정 (취소 버튼 제거)
         .alert("개발자 모드", isPresented: $showDevModeChangeAlert) {
             Button("확인") {
-                // 앱 자동 재시작 URL 스킴 호출 (Springboard를 통한 자체 자동 재부팅)
-                let url = URL(string: UIApplication.openSettingsURLString)!
-                UIApplication.shared.open(url, options: [:]) { _ in
-                    exit(0)
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    window.rootViewController = UIHostingController(rootView: Exam4meAppViewForRestart())
                 }
             }
         } message: {
@@ -1327,6 +1326,26 @@ struct SettingsView: View {
             
             topController.present(activityVC, animated: true, completion: nil)
         }
+    }
+}
+
+// 앱 내부 무결점 즉시 재시작을 위한 헬퍼 뷰
+struct Exam4meAppViewForRestart: View {
+    @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
+    @AppStorage("isDarkMode") private var isDarkMode = false
+    @StateObject private var networkMonitor = NetworkMonitor()
+
+    var body: some View {
+        ZStack {
+            if !networkMonitor.isConnected {
+                OfflineView()
+            } else if !hasAgreedToTerms {
+                TermsView(hasAgreed: $hasAgreedToTerms)
+            } else {
+                ContentView()
+            }
+        }
+        .preferredColorScheme(isDarkMode ? .dark : .light)
     }
 }
 
