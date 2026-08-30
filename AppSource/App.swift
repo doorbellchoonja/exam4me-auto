@@ -550,6 +550,29 @@ struct WebViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
+struct YouTubeWebViewContainer: UIViewRepresentable {
+    let urlString: String
+    
+    func makeUIView(context: Context) -> WKWebView {
+        let prefs = WKPreferences()
+        prefs.javaScriptCanOpenWindowsAutomatically = true
+        let config = WKWebViewConfiguration()
+        config.preferences = prefs
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        
+        if let url = URL(string: urlString) {
+            webView.load(URLRequest(url: url))
+        }
+        return webView
+    }
+    
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
 class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
     @Published var listeningCount: Int = 0
     @Published var vocabCount: Int = 0
@@ -866,12 +889,14 @@ struct ContentView: View {
                                         vm.webView.goBack() 
                                     }
                                 }) {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
-                                        .padding(8)
-                                        .background(.ultraThinMaterial)
-                                        .clipShape(Circle())
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "chevron.left")
+                                    }
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
+                                    .padding(8)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
                                 }
                                 .disabled(!vm.canGoBack)
 
