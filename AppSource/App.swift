@@ -820,8 +820,10 @@ struct ContentView: View {
 
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
-    @AppStorage("testOfflineAlert") private var testOfflineAlert = false
-    @AppStorage("testServerDownAlert") private var testServerDownAlert = false
+    
+    // 앱을 재시작해도 유지되지 않도록 @State로 변경하여 버그 해결
+    @State private var testOfflineAlert = false
+    @State private var testServerDownAlert = false
 
     @State private var floatingButtonOffset = CGSize(width: 120, height: 250)
     @State private var showJSSheet = false
@@ -831,6 +833,12 @@ struct ContentView: View {
         ZStack {
             if testOfflineAlert {
                 OfflineView()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation {
+                            testOfflineAlert = false
+                        }
+                    }
             } else {
                 DynamicBackground()
 
@@ -1217,7 +1225,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(serverManager: serverManager)
+            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert)
         }
         .sheet(isPresented: $showGuide) {
             GuideView()
@@ -1321,6 +1329,14 @@ struct ContentView: View {
         } message: {
             Text("온라인서버가 접속불가인 상태이기때문에 앱도 온라인서버가 연결잘될때 복구됩니다.")
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if testServerDownAlert {
+                withAnimation {
+                    testServerDownAlert = false
+                }
+            }
+        }
         .onAppear {
             if !testServerDownAlert {
                 serverManager.checkServerStatus { isOnline in
@@ -1341,7 +1357,7 @@ struct ContentView: View {
         if let start = input.range(of: "(")?.upperBound, let end = input.range(of: ")")?.lowerBound {
             target = String(input[start..<end])
         }
-        let digits = input.components(separatedBy: ")").last?.filter { $0.isNumber }.compactMap { Int(String($0)) } ?? []
+        let digits = input.components(separatedBy: ").last?.filter { $0.isNumber }.compactMap { Int(String($0)) } ?? []
         return (target, digits)
     }
 
@@ -1396,12 +1412,12 @@ struct ContentView: View {
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var serverManager: ServerStatusManager
+    @Binding var testOfflineAlert: Bool
+    @Binding var testServerDownAlert: Bool
     
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
-    @AppStorage("testOfflineAlert") private var testOfflineAlert = false
-    @AppStorage("testServerDownAlert") private var testServerDownAlert = false
 
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
