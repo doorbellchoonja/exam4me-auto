@@ -313,7 +313,6 @@ struct GuideView: View {
                 .padding(.top, 24)
                 .padding(.horizontal, 20)
 
-                // 듣기, 쓰기, 자주 묻는 질문 탭 메뉴
                 HStack(spacing: 8) {
                     Button(action: {
                         withAnimation(.snappy) { selectedTab = .listening }
@@ -402,7 +401,6 @@ struct GuideView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 40)
                     } else {
-                        // 자주 묻는 질문 (FAQ) 탭 내용
                         VStack(alignment: .leading, spacing: 28) {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Q: 듣기자동화중에 튕기거나 나가졌는데 시작하기가 아니고 이어하기로 떠요 어떻게 해야하나요?")
@@ -414,7 +412,6 @@ struct GuideView: View {
                                     .foregroundColor(.secondary)
                                     .lineSpacing(4)
                                 
-                                // 첫 번째 FAQ 이미지 링크
                                 AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607875.jpg/file_607875.jpg")) { phase in
                                     switch phase {
                                     case .empty:
@@ -429,7 +426,6 @@ struct GuideView: View {
                                 }
                                 .padding(.top, 4)
                                 
-                                // 두 번째 FAQ 이미지 링크
                                 AsyncImage(url: URL(string: "https://hc1.checker.in/file2link/photos/file_607876.jpg/file_607876.jpg")) { phase in
                                     switch phase {
                                     case .empty:
@@ -1341,17 +1337,13 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        // 수정 완료: 오류의 원인이 되었던 외부 뷰 호출을 제거하고, 순수하게 앱 루트 상태값을 초기화하여 깔끔하게 재기동되도록 수정
         .alert("개발자 모드", isPresented: $showDevModeChangeAlert) {
             Button("확인") {
-                // 앱 강제 재시작 (메인 윈도우 루트를 리로드하여 완벽하게 재기동)
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = scene.windows.first {
-                    window.rootViewController = UIHostingController(rootView: Exam4meAppViewForRestart())
-                    window.makeKeyAndVisible()
-                }
+                exit(0)
             }
         } message: {
-            Text("\(devModeAlertMessage)\n확인 버튼을 누르면 앱이 자동으로 재시작됩니다.")
+            Text("\(devModeAlertMessage)\n확인 버튼을 누르면 앱이 종료됩니다. 다시 실행해 주세요.")
         }
         .alert("안내", isPresented: $showSecretMeaningAlert) {
             Button("확인", role: .cancel) {}
@@ -1397,5 +1389,261 @@ struct SettingsView: View {
             
             topController.present(activityVC, animated: true, completion: nil)
         }
+    }
+}
+
+struct StatusBadge: View {
+    let title: String
+    let count: Int
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(color)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Text("\(count)개 미수행")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(.primary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(14)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+    }
+}
+
+struct WebViewContainer: UIViewRepresentable {
+    @ObservedObject var vm: WebViewModel
+    func makeUIView(context: Context) -> WKWebView { vm.webView }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
+class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
+    @Published var listeningCount: Int = 0
+    @Published var vocabCount: Int = 0
+    @Published var canGoBack: Bool = false
+    @Published var isLoadingWeb: Bool = true
+    let webView: WKWebView
+    private var backForwardObserver: NSKeyValueObservation?
+
+    override init() {
+        let prefs = WKPreferences()
+        prefs.javaScriptCanOpenWindowsAutomatically = true
+
+        let config = WKWebViewConfiguration()
+        config.preferences = prefs
+        config.allowsInlineMediaPlayback = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        self.webView = WKWebView(frame: .zero, configuration: config)
+        super.init()
+        self.webView.navigationDelegate = self
+        self.webView.uiDelegate = self 
+        
+        backForwardObserver = self.webView.observe(\.canGoBack, options: .new) { [weak self] webView, _ in
+            DispatchQueue.main.async {
+                self?.canGoBack = webView.canGoBack
+            }
+        }
+        
+        loadInitialURL()
+    }
+
+    deinit {
+        backForwardObserver?.invalidate()
+    }
+
+    func loadInitialURL() {
+        if let url = URL(string: "https://ssdasa.exam4me.com") {
+            self.webView.load(URLRequest(url: url))
+        }
+    }
+
+    func closePopup() {
+        if let url = URL(string: "https://ssdasa.exam4me.com/_student/studentHome2.jsp") {
+            self.webView.load(URLRequest(url: url))
+        }
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        DispatchQueue.main.async { self.isLoadingWeb = true }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        DispatchQueue.main.async { self.isLoadingWeb = false }
+        
+        let detectScript = """
+        (function() {
+            var text = document.body.innerText;
+            var l = (text.match(/Listening/gi) || []).length;
+            var v = (text.match(/Vocabulary/gi) || []).length;
+            return { listening: l, vocab: v };
+        })();
+        """
+        webView.evaluateJavaScript(detectScript) { [weak self] res, _ in
+            if let dict = res as? [String: Any] {
+                DispatchQueue.main.async {
+                    self?.listeningCount = dict["listening"] as? Int ?? 0
+                    self?.vocabCount = dict["vocab"] as? Int ?? 0
+                }
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        DispatchQueue.main.async { self.isLoadingWeb = false }
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        DispatchQueue.main.async { self.isLoadingWeb = false }
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
+            return nil
+        }
+        webView.load(navigationAction.request)
+        return nil
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let root = scene.windows.first?.rootViewController else {
+                completionHandler()
+                return
+            }
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler() }))
+            
+            var topController = root
+            while let presented = topController.presentedViewController {
+                guard let nextPresented = presented.presentedViewController else { break }
+                topController = nextPresented
+            }
+            topController.present(alert, animated: true)
+        }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let root = scene.windows.first?.rootViewController else {
+                completionHandler(false)
+                return
+            }
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
+            alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
+            
+            var topController = root
+            while let presented = topController.presentedViewController {
+                guard let nextPresented = presented.presentedViewController else { break }
+                topController = nextPresented
+            }
+            topController.present(alert, animated: true)
+        }
+    }
+
+    func executeRoutine1(target: String, answers: [Int], completion: @escaping () -> Void) {
+        let answersJSON = answers.description
+
+        let script = """
+        (async function() {
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            
+            var e = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
+            document.dispatchEvent(e);
+            await sleep(10);
+
+            if (typeof goNext === 'function') goNext(); await sleep(20);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(20);
+            if (typeof goStep01 === 'function') goStep01(); await sleep(30);
+
+            var answers = \(answersJSON);
+            var total = answers.length;
+
+            for (var i = 0; i < total; i++) {
+                var ans = answers[i];
+                
+                if (typeof goStep01_sel === 'function') {
+                    goStep01_sel(i, 2, ans);
+                }
+                await sleep(10);
+
+                if (i < total - 1) {
+                    if (typeof goStep0101_answer === 'function') goStep0101_answer();
+                } else {
+                    if (typeof goStep0101_finish === 'function') goStep0101_finish();
+                }
+                await sleep(20);
+            }
+
+            if (typeof goStep === 'function') goStep('info02'); await sleep(20);
+            if (typeof goStep === 'function') goStep('step0201'); await sleep(20);
+
+            for (var k = 0; k < total - 1; k++) {
+                if (typeof goStep0201_step === 'function') goStep0201_step('next');
+                await sleep(10);
+            }
+
+            if (typeof goStep === 'function') goStep('info03'); await sleep(20);
+            if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
+            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
+
+            location.reload();
+            await sleep(1000);
+
+            return true;
+        })();
+        """
+        
+        webView.evaluateJavaScript(script, completionHandler: { _, _ in
+            DispatchQueue.main.async {
+                completion()
+            }
+        })
+    }
+
+    func executeRoutine2(completion: @escaping () -> Void) {
+        let script = """
+        (async function() {
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            
+            if (typeof goNext === 'function') goNext(); await sleep(30);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(30);
+
+            return true;
+        })();
+        """
+        
+        webView.evaluateJavaScript(script, completionHandler: { _, _ in
+            DispatchQueue.main.async {
+                completion()
+            }
+        })
+    }
+
+    func executeStep04() {
+        let script = """
+        (async function() {
+            if (typeof goStep04 === 'function') goStep04('Y');
+            return true;
+        })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 }
