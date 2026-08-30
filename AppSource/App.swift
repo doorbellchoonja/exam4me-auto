@@ -426,29 +426,29 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
-                    HStack(spacing: 8) {
-                        // Exam4me 글자 줄바꿈 방지 및 한 줄 유지 (.fixedSize())
+                    HStack(spacing: 6) {
                         Button(action: {
                             vm.loadInitialURL()
                         }) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 4) {
                                 Circle()
                                     .fill(vm.listeningCount > 0 ? Color.green : Color.orange)
-                                    .frame(width: 8, height: 8)
+                                    .frame(width: 7, height: 7)
                                     .shadow(color: vm.listeningCount > 0 ? .green : .orange, radius: 4)
                                 Text("Exam4me")
-                                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                                    .font(.system(size: 16, weight: .heavy, design: .rounded))
                                     .foregroundColor(.primary)
                             }
                         }
                         .fixedSize(horizontal: true, vertical: false)
 
-                        Spacer(minLength: 4)
+                        Spacer(minLength: 2)
 
-                        HStack(spacing: 8) {
+                        // 글씨를 없애고 아이콘만 남겨 공간 확보
+                        HStack(spacing: 6) {
                             Button(action: { showGuide = true }) {
                                 Image(systemName: "questionmark.circle.fill")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(.primary)
                                     .padding(8)
                                     .background(.ultraThinMaterial)
@@ -457,7 +457,7 @@ struct ContentView: View {
                             
                             Button(action: { showSettings = true }) {
                                 Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(.primary)
                                     .padding(8)
                                     .background(.ultraThinMaterial)
@@ -466,7 +466,7 @@ struct ContentView: View {
 
                             Button(action: { vm.webView.reload() }) {
                                 Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(.primary)
                                     .padding(8)
                                     .background(.ultraThinMaterial)
@@ -478,32 +478,24 @@ struct ContentView: View {
                                     vm.webView.goBack() 
                                 }
                             }) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "chevron.left")
-                                    Text("뒤로")
-                                }
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(16)
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
+                                    .padding(8)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
                             }
                             .disabled(!vm.canGoBack)
 
                             Button(action: {
                                 vm.closePopup()
                             }) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "xmark.circle")
-                                    Text("팝업닫기")
-                                }
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.red)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(16)
+                                Image(systemName: "xmark.circle")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.red)
+                                    .padding(8)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
                             }
                         }
                     }
@@ -1343,6 +1335,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 await sleep(10);
             }
 
+            if (typeof goStep === 'function') goSize('info03'); await sleep(20);
             if (typeof goStep === 'function') goStep('info03'); await sleep(20);
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
             if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
