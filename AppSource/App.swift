@@ -125,39 +125,46 @@ struct DynamicBackground: View {
     }
 }
 
-// 사용자가 제공한 loading.json 벡터 데이터 기반 커스텀 로딩 뷰
-struct LoadingView: View {
-    @Binding var isLoading: Bool
+// 공통 벡터 로딩 스피너 뷰 (loading 2.json 싱크)
+struct VectorSpinnerView: View {
     @State private var isRotating = false
     @State private var trimEnd: CGFloat = 0.1
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .trim(from: 0, to: trimEnd)
+                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .frame(width: 90, height: 90)
+                .rotationEffect(.degrees(isRotating ? 360 : 0))
+                .animation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false), value: isRotating)
+            
+            Circle()
+                .trim(from: 0, to: 0.6)
+                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.4), style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                .frame(width: 65, height: 65)
+                .rotationEffect(.degrees(isRotating ? -360 : 0))
+                .animation(Animation.linear(duration: 2.0).repeatForever(autoreverses: false), value: isRotating)
+        }
+        .onAppear {
+            isRotating = true
+            withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                trimEnd = 0.75
+            }
+        }
+    }
+}
+
+// 첫 실행 로딩 (3초~5초 랜덤으로 단축)
+struct LoadingView: View {
+    @Binding var isLoading: Bool
 
     var body: some View {
         ZStack {
             DynamicBackground()
             
             VStack(spacing: 28) {
-                // 커스텀 다중 링 벡터 로딩 애니메이션 (loading.json 싱크)
-                ZStack {
-                    Circle()
-                        .trim(from: 0, to: trimEnd)
-                        .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                        .frame(width: 90, height: 90)
-                        .rotationEffect(.degrees(isRotating ? 360 : 0))
-                        .animation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false), value: isRotating)
-                    
-                    Circle()
-                        .trim(from: 0, to: 0.6)
-                        .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.4), style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .frame(width: 65, height: 65)
-                        .rotationEffect(.degrees(isRotating ? -360 : 0))
-                        .animation(Animation.linear(duration: 2.0).repeatForever(autoreverses: false), value: isRotating)
-                }
-                .onAppear {
-                    isRotating = true
-                    withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                        trimEnd = 0.75
-                    }
-                }
+                VectorSpinnerView()
                 
                 Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -168,7 +175,7 @@ struct LoadingView: View {
             .liquidGlass()
         }
         .onAppear {
-            let randomTime = Double.random(in: 5.0...10.0)
+            let randomTime = Double.random(in: 3.0...5.0)
             DispatchQueue.main.asyncAfter(deadline: .now() + randomTime) {
                 withAnimation(.easeInOut(duration: 0.6)) {
                     isLoading = false
@@ -514,11 +521,22 @@ struct ContentView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 12)
 
-                WebViewContainer(vm: vm)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                // 웹뷰 컨테이너 및 로딩 오버레이
+                ZStack {
+                    WebViewContainer(vm: vm)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                    
+                    if vm.isLoadingWeb {
+                        ZStack {
+                            Color(UIColor.systemBackground).opacity(0.85)
+                            VectorSpinnerView()
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             }
 
             if isDelaying {
@@ -987,6 +1005,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
     @Published var listeningCount: Int = 0
     @Published var vocabCount: Int = 0
     @Published var canGoBack: Bool = false
+    @Published var isLoadingWeb: Bool = true // 웹뷰 로딩 상태 추가
     let webView: WKWebView
     private var backForwardObserver: NSKeyValueObservation?
 
@@ -1017,6 +1036,39 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 
     deinit {
         backForwardObserver?.invalidate()
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        DispatchQueue.main.async { self.isLoadingWeb = true }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        DispatchQueue.main.async { self.isLoadingWeb = false }
+        
+        let detectScript = """
+        (function() {
+            var text = document.body.innerText;
+            var l = (text.match(/Listening/gi) || []).length;
+            var v = (text.match(/Vocabulary/gi) || []).length;
+            return { listening: l, vocab: v };
+        })();
+        """
+        webView.evaluateJavaScript(detectScript) { [weak self] res, _ in
+            if let dict = res as? [String: Any] {
+                DispatchQueue.main.async {
+                    self?.listeningCount = dict["listening"] as? Int ?? 0
+                    self?.vocabCount = dict["vocab"] as? Int ?? 0
+                }
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        DispatchQueue.main.async { self.isLoadingWeb = false }
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        DispatchQueue.main.async { self.isLoadingWeb = false }
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
@@ -1057,25 +1109,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             topController = presented
         }
         topController.present(alert, animated: true)
-    }
-
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        let detectScript = """
-        (function() {
-            var text = document.body.innerText;
-            var l = (text.match(/Listening/gi) || []).length;
-            var v = (text.match(/Vocabulary/gi) || []).length;
-            return { listening: l, vocab: v };
-        })();
-        """
-        webView.evaluateJavaScript(detectScript) { [weak self] res, _ in
-            if let dict = res as? [String: Any] {
-                DispatchQueue.main.async {
-                    self?.listeningCount = dict["listening"] as? Int ?? 0
-                    self?.vocabCount = dict["vocab"] as? Int ?? 0
-                }
-            }
-        }
     }
 
     func executeRoutine(target: String, answers: [Int], completion: @escaping () -> Void) {
