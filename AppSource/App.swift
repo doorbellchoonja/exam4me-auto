@@ -293,7 +293,6 @@ struct GuideView: View {
                 .padding(.top, 24)
                 .padding(.horizontal, 20)
 
-                // 듣기/쓰기 탭 선택 버튼
                 HStack(spacing: 12) {
                     Button(action: { selectedTab = .listening }) {
                         Text("🎧 듣기 사용법")
@@ -427,8 +426,8 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
-                    HStack {
-                        // Exam4me 글자 누르면 처음 웹뷰 사이트로 이동
+                    HStack(spacing: 8) {
+                        // Exam4me 글자 줄바꿈 방지 및 한 줄 유지 (.fixedSize())
                         Button(action: {
                             vm.loadInitialURL()
                         }) {
@@ -442,15 +441,16 @@ struct ContentView: View {
                                     .foregroundColor(.primary)
                             }
                         }
+                        .fixedSize(horizontal: true, vertical: false)
 
-                        Spacer()
+                        Spacer(minLength: 4)
 
-                        HStack(spacing: 12) {
+                        HStack(spacing: 8) {
                             Button(action: { showGuide = true }) {
                                 Image(systemName: "questionmark.circle.fill")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.primary)
-                                    .padding(10)
+                                    .padding(8)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Circle())
                             }
@@ -459,7 +459,7 @@ struct ContentView: View {
                                 Image(systemName: "gearshape.fill")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.primary)
-                                    .padding(10)
+                                    .padding(8)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Circle())
                             }
@@ -468,44 +468,42 @@ struct ContentView: View {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.primary)
-                                    .padding(10)
+                                    .padding(8)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Circle())
                             }
 
-                            // 뒤로가기 버튼
                             Button(action: { 
                                 if vm.webView.canGoBack {
                                     vm.webView.goBack() 
                                 }
                             }) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 2) {
                                     Image(systemName: "chevron.left")
                                     Text("뒤로")
                                 }
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(vm.canGoBack ? .primary : .secondary.opacity(0.5))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
                                 .background(.ultraThinMaterial)
-                                .cornerRadius(20)
+                                .cornerRadius(16)
                             }
                             .disabled(!vm.canGoBack)
 
-                            // 팝업창 닫기 버튼 (뒤로가기 버튼 오른쪽)
                             Button(action: {
                                 vm.closePopup()
                             }) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 2) {
                                     Image(systemName: "xmark.circle")
                                     Text("팝업닫기")
                                 }
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.red)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
                                 .background(.ultraThinMaterial)
-                                .cornerRadius(20)
+                                .cornerRadius(16)
                             }
                         }
                     }
@@ -1085,7 +1083,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .preferredColorScheme(isDarkMode ? .dark : .light) // 설정탭 오픈 시에도 즉시 다크모드 적용 반영
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .alert("안내", isPresented: $showBugReportAlert) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -1194,18 +1192,15 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         backForwardObserver?.invalidate()
     }
 
-    // Exam4me 글자 누를 때 처음 사이트로 이동하는 메서드
     func loadInitialURL() {
         if let url = URL(string: "https://ssdasa.exam4me.com") {
             self.webView.load(URLRequest(url: url))
         }
     }
 
-    // 팝업창 닫기 버튼 동작 메서드
     func closePopup() {
         let closeScript = """
         (function() {
-            // 레이어 팝업이나 모달 닫기 버튼 공통 처리 (클래스나 아이디 기반 닫기 및 스타일 숨김)
             var closeBtns = document.querySelectorAll('.close, .pop_close, [class*="close"], [id*="close"]');
             for(var i=0; i<closeBtns.length; i++) {
                 closeBtns[i].click();
