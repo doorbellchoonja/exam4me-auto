@@ -55,7 +55,6 @@ class NetworkMonitor: ObservableObject {
     }
 }
 
-// 인터넷 연결 해제 뷰 (테스트 모드일 때만 블러 배경 터치 시 닫힘 허용)
 struct OfflineView: View {
     var isTestMode: Bool = false
     var onClose: (() -> Void)? = nil
@@ -102,7 +101,6 @@ struct OfflineView: View {
     }
 }
 
-// 자동 OTA 업데이트 알림 팝업 (나중에 하기 버튼 제거, 테스트 모드 시 블러 터치 닫기 지원)
 struct OTAUpdateOverlayView: View {
     let latestVersion: String
     @Binding var isPresented: Bool
@@ -147,6 +145,10 @@ struct OTAUpdateOverlayView: View {
                     let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
                     if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
                         UIApplication.shared.open(otaURL)
+                    }
+                    // 업데이트 설치 링크 실행과 동시에 앱 종료
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        exit(0)
                     }
                 }) {
                     Text("업데이트 설치")
@@ -2255,7 +2257,6 @@ struct SettingsView: View {
 
                                 Divider().background(Color.primary.opacity(0.1))
                                 
-                                // 앱 자동 업데이트 안내 테스트 토글 추가
                                 Toggle(isOn: $testAutoUpdateAlert) {
                                     HStack {
                                         Image(systemName: "arrow.down.circle.fill")
@@ -2303,6 +2304,9 @@ struct SettingsView: View {
                                     let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
                                     if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
                                         UIApplication.shared.open(otaURL)
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        exit(0)
                                     }
                                 }) {
                                     Text("원클릭 OTA 다이렉트 업데이트")
