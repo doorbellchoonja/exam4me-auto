@@ -879,6 +879,46 @@ class StudyStatsManager: ObservableObject {
     }
 }
 
+// 매크로 저장소 관리를 위한 전용 매니저 클래스 (불변성 오류 방지)
+class JSMacroManager: ObservableObject {
+    @AppStorage("savedJSMacros") var savedMacrosData: String = "[]"
+
+    struct JSMacro: Codable, Identifiable, Hashable {
+        var id = UUID()
+        let name: String
+        let code: String
+    }
+
+    var macros: [JSMacro] {
+        get {
+            guard let data = savedMacrosData.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([JSMacro].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if let encoded = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: encoded, encoding: .utf8) {
+                savedMacrosData = jsonString
+                objectWillChange.send()
+            }
+        }
+    }
+
+    func addMacro(name: String, code: String) {
+        var current = macros
+        current.append(JSMacro(name: name, code: code))
+        macros = current
+    }
+
+    func removeMacro(id: UUID) {
+        var current = macros
+        current.removeAll { $0.id == id }
+        macros = current
+    }
+}
+
 struct StatusBadge: View {
     let title: String
     let count: Int
@@ -1211,6 +1251,7 @@ struct ContentView: View {
     @StateObject private var vm = WebViewModel()
     @StateObject private var serverManager = ServerStatusManager()
     @StateObject private var statsManager = StudyStatsManager()
+    @StateObject private var macroManager = JSMacroManager()
     
     @State private var answerInput: String = ""
     @State private var delayMinutes: Int = 10
@@ -1232,7 +1273,6 @@ struct ContentView: View {
     @State private var isYouTubeMinimized: Bool = false
     @State private var showCancelDelayConfirm: Bool = false
 
-    // 다크 슬립 모드 (미니 화면 보호 모드) 상태값
     @State private var isDarkSleepMode: Bool = false
 
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
@@ -1537,7 +1577,6 @@ struct ContentView: View {
                         .background(.ultraThinMaterial)
                         .edgesIgnoringSafeArea(.all)
 
-                    // 다크 슬립 모드 (미니 화면 보호 모드) 활성화 시 화면 어둡게 보호
                     if isDarkSleepMode {
                         ZStack {
                             Color.black.edgesIgnoringSafeArea(.all)
@@ -1749,8 +1788,7 @@ struct ContentView: View {
             GuideView()
         }
         .sheet(isPresented: $showJSSheet) {
-            // 사용자 커스텀 자바스크립트 스크립트(매크로) 저장소 기능 내장
-            JSExecutionView(vm: vm, customJSInput: $customJSInput, showJSSheet: $showJSSheet)
+            JSExecutionView(vm: vm, customJSInput: $customJSInput, showJSSheet: $showJSSheet, macroManager: macroManager)
         }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
@@ -1865,7 +1903,7 @@ struct ContentView: View {
             isYouTubeMinimized = false
             isDarkSleepMode = false
         }
-        // 시간 뻐기기 중 자동 화면 꺼짐 방지
+        // 시간 뻐기기 중 화면 꺼짐 자동 방지
         UIApplication.shared.isIdleTimerDisabled = true
 
         timer?.invalidate()
@@ -1914,32 +1952,10 @@ struct JSExecutionView: View {
     @ObservedObject var vm: WebViewModel
     @Binding var customJSInput: String
     @Binding var showJSSheet: Bool
+    @ObservedObject var macroManager: JSMacroManager
     
-    @AppStorage("savedJSMacros") private var savedMacrosData: String = "[]"
     @State private var macroNameInput: String = ""
     @State private var showSaveAlert: Bool = false
-
-    struct JSMacro: Codable, Identifiable, Hashable {
-        var id = UUID()
-        let name: String
-        let code: String
-    }
-
-    var macros: [JSMacro] {
-        get {
-            guard let data = savedMacrosData.data(using: .utf8),
-                  let decoded = try? JSONDecoder().decode([JSMacro].self, data) else {
-                return []
-            }
-            return decoded
-        }
-        set {
-            if let encoded = try? JSONEncoder().encode(newValue),
-               let jsonString = String(data: encoded, encoding: .utf8) {
-                savedMacrosData = jsonString
-            }
-        }
-    }
 
     var body: some View {
         ZStack {
@@ -1988,20 +2004,19 @@ struct JSExecutionView: View {
                     }
                 }
 
-                // 저장된 매크로 템플릿 목록 표시
                 VStack(alignment: .leading, spacing: 6) {
                     Text("⭐ 즐겨찾는 매크로 템플릿")
                         .font(.system(size: 13, weight: .bold))
                     
                     ScrollView {
                         VStack(spacing: 6) {
-                            if macros.isEmpty {
+                            if macroManager.macros.isEmpty {
                                 Text("저장된 매크로가 없습니다.")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                                     .padding(.top, 10)
                             } else {
-                                ForEach(macros) { macro in
+                                ForEach(macroManager.macros) { macro in
                                     HStack {
                                         Button(action: {
                                             customJSInput = macro.code
@@ -2013,9 +2028,7 @@ struct JSExecutionView: View {
                                         }
                                         
                                         Button(action: {
-                                            var current = macros
-                                            current.removeAll { $0.id == macro.id }
-                                            macros = current
+                                            macroManager.removeMacro(id: macro.id)
                                         }) {
                                             Image(systemName: "trash")
                                                 .foregroundColor(.red)
@@ -2032,7 +2045,6 @@ struct JSExecutionView: View {
                     .frame(height: 110)
                 }
                 
-                // 오류 발생 시 원클릭 클립보드 리포트 생성 섹션
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("💻 웹뷰 개발자 콘솔 & 오류 리포트")
@@ -2087,10 +2099,7 @@ struct JSExecutionView: View {
                 TextField("매크로 이름", text: $macroNameInput)
                 Button("저장") {
                     if !macroNameInput.isEmpty {
-                        let newMacro = JSMacro(name: macroNameInput, code: customJSInput)
-                        var current = macros
-                        current.append(newMacro)
-                        macros = current
+                        macroManager.addMacro(name: macroNameInput, code: customJSInput)
                         macroNameInput = ""
                     }
                 }
