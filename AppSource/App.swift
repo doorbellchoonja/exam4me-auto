@@ -632,6 +632,7 @@ class ServerStatusManager: ObservableObject {
     @Published var currentSpeedText: String = "0.0 KB/s"
     
     private var speedTimer: Timer?
+    private var hasAlertedSlowNetwork = false
     
     func checkServerStatus(completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: "https://ssdasa.exam4me.com") else {
@@ -655,30 +656,6 @@ class ServerStatusManager: ObservableObject {
         }.resume()
     }
     
-    func measureNetworkSpeed() {
-        guard let url = URL(string: "https://ssdasa.exam4me.com") else { return }
-        let startTime = Date()
-        
-        let task = URLSession.shared.dataTask(with: url) { data, _, error in
-            let elapsedTime = Date().timeIntervalSince(startTime)
-            if let data = data, error == nil, elapsedTime > 0 {
-                let bytesLoaded = Double(data.count)
-                let speedBytesPerSec = bytesLoaded / elapsedTime
-                let speedKBPerSec = speedBytesPerSec / 1024
-                
-                // 기준을 100 KB/s 미만으로 변경
-                if speedKBPerSec < 100.0 {
-                    DispatchQueue.main.async {
-                        self.isSlowNetwork = true
-                        self.showSlowNetworkAlert = true
-                    }
-                }
-            }
-        }
-        task.resume()
-    }
-    
-    // 0.1초마다 실시간으로 인터넷 속도 측정 및 반영
     func startRealtimeSpeedTracking() {
         speedTimer?.invalidate()
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -690,14 +667,21 @@ class ServerStatusManager: ObservableObject {
                 if let data = data, error == nil, elapsedTime > 0 {
                     let bytesLoaded = Double(data.count)
                     let speedBytesPerSec = bytesLoaded / elapsedTime
+                    let speedKBPerSec = speedBytesPerSec / 1024
                     
                     DispatchQueue.main.async {
                         if speedBytesPerSec >= 1024 * 1024 {
                             let speedMB = speedBytesPerSec / (1024 * 1024)
                             self.currentSpeedText = String(format: "%.2f MB/s", speedMB)
                         } else {
-                            let speedKB = speedBytesPerSec / 1024
-                            self.currentSpeedText = String(format: "%.1f KB/s", speedKB)
+                            self.currentSpeedText = String(format: "%.1f KB/s", speedKBPerSec)
+                        }
+                        
+                        // 실시간 속도가 100 KB/s 미만으로 떨어지면 느림 안내 팝업 노출 (세션당 1회)
+                        if speedKBPerSec < 100.0 && !self.hasAlertedSlowNetwork {
+                            self.hasAlertedSlowNetwork = true
+                            self.isSlowNetwork = true
+                            self.showSlowNetworkAlert = true
                         }
                     }
                 } else {
@@ -1545,9 +1529,8 @@ struct ContentView: View {
             Text("시간을 그만 뻐기겠습니까?")
         }
         .onAppear {
-            if !testSlowNetworkAlert {
-                serverManager.measureNetworkSpeed()
-            }
+            serverManager.startRealtimeSpeedTracking()
+            
             if !testServerDownAlert {
                 serverManager.checkServerStatus { isOnline in
                     if !isOnline {
@@ -1556,15 +1539,11 @@ struct ContentView: View {
                 }
             }
             if isDeveloperMode && enableSpeedViewer {
-                serverManager.startRealtimeSpeedTracking()
+                // Already started tracking via startRealtimeSpeedTracking
             }
         }
         .onChange(of: enableSpeedViewer) { newValue in
-            if newValue {
-                serverManager.startRealtimeSpeedTracking()
-            } else {
-                serverManager.stopRealtimeSpeedTracking()
-            }
+            // Speed tracking is handled continuously by ServerStatusManager
         }
     }
 
