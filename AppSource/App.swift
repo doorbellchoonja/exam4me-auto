@@ -762,7 +762,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
     @Published var vocabCount: Int = 0
     @Published var canGoBack: Bool = false
     @Published var isLoadingWeb: Bool = true
-    @Published var consoleLogs: [String] = [] // 개발자 콘솔 로그 저장 배열
+    @Published var consoleLogs: [String] = []
     let webView: WKWebView
     private var backForwardObserver: NSKeyValueObservation?
 
@@ -775,7 +775,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
 
-        // 웹뷰 콘솔 로그 수집을 위한 UserContentController 설정
         let userContentController = WKUserContentController()
         let consoleScript = """
         (function() {
@@ -799,9 +798,13 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         """
         let userScript = WKUserScript(source: consoleScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
         userContentController.addUserScript(userScript)
+
+        let webViewTemp = WKWebView(frame: .zero, configuration: config)
+        self.webView = webViewTemp
+        super.init()
         
         class ScriptMessageHandler: NSObject, WKScriptMessageHandler {
-            var parent: WebViewModel?
+            weak var parent: WebViewModel?
             init(parent: WebViewModel) { self.parent = parent }
             func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
                 if message.name == "consoleHandler", let body = message.body as? String {
@@ -816,8 +819,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         userContentController.add(messageHandler, name: "consoleHandler")
         config.userContentController = userContentController
 
-        self.webView = WKWebView(frame: .zero, configuration: config)
-        super.init()
         self.webView.navigationDelegate = self
         self.webView.uiDelegate = self 
         
@@ -1475,7 +1476,12 @@ struct ContentView: View {
                 SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
         }
-        // 자바스크립트 실행 및 웹뷰 개발자 콘솔 뷰어 시트
+        .sheet(isPresented: $showSettings) {
+            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
+        }
+        .sheet(isPresented: $showGuide) {
+            GuideView()
+        }
         .sheet(isPresented: $showJSSheet) {
             ZStack {
                 DynamicBackground()
@@ -1507,7 +1513,6 @@ struct ContentView: View {
                             .cornerRadius(12)
                     }
                     
-                    // 웹뷰 개발자 콘솔 로그 뷰어 영역 + 복사 버튼
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text("💻 웹뷰 개발자 콘솔 로그")
@@ -1557,12 +1562,6 @@ struct ContentView: View {
                 }
                 .padding(20)
             }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
-        }
-        .sheet(isPresented: $showGuide) {
-            GuideView()
         }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
@@ -1944,7 +1943,7 @@ struct SettingsView: View {
                             
                             Button(action: { showBugReportAlert = true }) {
                                 HStack {
-                                    Text("앱 버그 및 신고")
+                                    Text("App 버그 및 신고")
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundColor(.primary)
                                     Spacer()
@@ -2053,6 +2052,7 @@ struct SettingsView: View {
         }
     }
     
+    private func styleShareButton() {}
     private func shareApp() {
         let repoURL = "https://doorbellchoonja.github.io/exam4me-auto"
         guard let url = URL(string: repoURL) else { return }
@@ -2070,7 +2070,7 @@ struct SettingsView: View {
             
             if let popover = activityVC.popoverPresentationController {
                 popover.sourceView = topController.view
-                popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midX, width: 0, height: 0)
+                popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midY, width: 0, height: 0)
                 popover.permittedArrowDirections = []
             }
             
