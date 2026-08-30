@@ -444,7 +444,6 @@ struct ContentView: View {
 
                         Spacer(minLength: 2)
 
-                        // 글씨를 없애고 아이콘만 남겨 공간 확보
                         HStack(spacing: 6) {
                             Button(action: { showGuide = true }) {
                                 Image(systemName: "questionmark.circle.fill")
@@ -487,6 +486,7 @@ struct ContentView: View {
                             }
                             .disabled(!vm.canGoBack)
 
+                            // 팝업닫기 버튼 (글씨 제거 후 아이콘만 남김)
                             Button(action: {
                                 vm.closePopup()
                             }) {
@@ -1190,22 +1190,10 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
+    // 팝업닫기 버튼 누를 때 지정된 주소로 바로 이동하도록 수정
     func closePopup() {
-        let closeScript = """
-        (function() {
-            var closeBtns = document.querySelectorAll('.close, .pop_close, [class*="close"], [id*="close"]');
-            for(var i=0; i<closeBtns.length; i++) {
-                closeBtns[i].click();
-            }
-            var popups = document.querySelectorAll('.popup, .modal, .layer_popup, [class*="popup"]');
-            for(var j=0; j<popups.length; j++) {
-                popups[j].style.display = 'none';
-            }
-        })();
-        """
-        webView.evaluateJavaScript(closeScript, completionHandler: nil)
-        if webView.canGoBack {
-            webView.goBack()
+        if let url = URL(string: "https://ssdasa.exam4me.com/_student/studentHome2.jsp") {
+            self.webView.load(URLRequest(url: url))
         }
     }
 
@@ -1335,7 +1323,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 await sleep(10);
             }
 
-            if (typeof goStep === 'function') goSize('info03'); await sleep(20);
             if (typeof goStep === 'function') goStep('info03'); await sleep(20);
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
             if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
