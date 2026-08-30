@@ -72,6 +72,7 @@ struct OfflineView: View {
             .padding(40)
             .liquidGlass()
             .padding(30)
+            .transition(.scale.combined(with: .opacity))
         }
     }
 }
@@ -96,8 +97,10 @@ extension View {
     }
 }
 
+// 배경에 미세하고 역동적인 네온 광원 이동 애니메이션 추가 (간지나는 감성 구현)
 struct DynamicBackground: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @State private var animateGlow = false
     
     var body: some View {
         ZStack {
@@ -105,22 +108,28 @@ struct DynamicBackground: View {
                 .edgesIgnoringSafeArea(.all)
             
             Circle()
-                .fill(Color.blue.opacity(isDarkMode ? 0.3 : 0.4))
-                .blur(radius: 80)
-                .frame(width: 300, height: 300)
-                .offset(x: -100, y: -200)
+                .fill(Color.blue.opacity(isDarkMode ? 0.35 : 0.45))
+                .blur(radius: 90)
+                .frame(width: 320, height: 320)
+                .offset(x: animateGlow ? -130 : 110, y: animateGlow ? -220 : -180)
+                .animation(Animation.easeInOut(duration: 6).repeatForever(autoreverses: true), value: animateGlow)
             
             Circle()
-                .fill(Color.purple.opacity(isDarkMode ? 0.3 : 0.4))
-                .blur(radius: 80)
-                .frame(width: 300, height: 300)
-                .offset(x: 150, y: 200)
+                .fill(Color.purple.opacity(isDarkMode ? 0.35 : 0.45))
+                .blur(radius: 90)
+                .frame(width: 320, height: 320)
+                .offset(x: animateGlow ? 140 : -120, y: animateGlow ? 220 : 170)
+                .animation(Animation.easeInOut(duration: 7).repeatForever(autoreverses: true), value: animateGlow)
                 
             Circle()
-                .fill(Color.cyan.opacity(isDarkMode ? 0.2 : 0.3))
-                .blur(radius: 80)
-                .frame(width: 250, height: 250)
-                .offset(x: -50, y: 400)
+                .fill(Color.cyan.opacity(isDarkMode ? 0.25 : 0.35))
+                .blur(radius: 90)
+                .frame(width: 280, height: 280)
+                .offset(x: animateGlow ? -60 : 70, y: animateGlow ? 380 : 420)
+                .animation(Animation.easeInOut(duration: 8).repeatForever(autoreverses: true), value: animateGlow)
+        }
+        .onAppear {
+            animateGlow = true
         }
     }
 }
@@ -158,6 +167,7 @@ struct VectorSpinnerView: View {
 
 struct LoadingView: View {
     @Binding var isLoading: Bool
+    @State private var pulseEffect = false
 
     var body: some View {
         ZStack {
@@ -165,6 +175,8 @@ struct LoadingView: View {
             
             VStack(spacing: 28) {
                 VectorSpinnerView()
+                    .scaleEffect(pulseEffect ? 1.05 : 0.95)
+                    .animation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseEffect)
                 
                 Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -173,8 +185,12 @@ struct LoadingView: View {
             }
             .padding(40)
             .liquidGlass()
+            .scaleEffect(isLoading ? 1.0 : 0.95)
+            .opacity(isLoading ? 1.0 : 0.0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isLoading)
         }
         .onAppear {
+            pulseEffect = true
             let randomTime = Double.random(in: 3.0...5.0)
             DispatchQueue.main.asyncAfter(deadline: .now() + randomTime) {
                 withAnimation(.easeInOut(duration: 0.5)) {
@@ -197,6 +213,7 @@ struct TermsView: View {
                 Image(systemName: "exclamationmark.shield.fill")
                     .font(.system(size: 60))
                     .foregroundColor(.orange)
+                    .symbolEffect(.bounce, options: .repeating)
                 
                 VStack(spacing: 12) {
                     Text("이용약관 동의")
@@ -256,10 +273,13 @@ struct TermsView: View {
             .padding(.vertical, 40)
             .liquidGlass()
             .padding(20)
+            .transition(.scale.combined(with: .opacity))
         }
         .alert("안내", isPresented: $showFirstGuideAlert) {
             Button("확인") {
-                withAnimation { hasAgreed = true }
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    hasAgreed = true
+                }
             }
         } message: {
             Text("처음 사용하시네요! 사용법 안부는 설정버튼 옆에 물음표모양 사용법버튼을 눌러주세요.")
@@ -294,7 +314,9 @@ struct GuideView: View {
                 .padding(.horizontal, 20)
 
                 HStack(spacing: 12) {
-                    Button(action: { selectedTab = .listening }) {
+                    Button(action: {
+                        withAnimation(.snappy) { selectedTab = .listening }
+                    }) {
                         Text("🎧 듣기 사용법")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(selectedTab == .listening ? .white : .primary)
@@ -304,7 +326,9 @@ struct GuideView: View {
                             .cornerRadius(12)
                     }
 
-                    Button(action: { selectedTab = .writing }) {
+                    Button(action: {
+                        withAnimation(.snappy) { selectedTab = .writing }
+                    }) {
                         Text("📝 쓰기 사용법")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(selectedTab == .writing ? .white : .primary)
@@ -356,6 +380,7 @@ struct GuideView: View {
                         .liquidGlass()
                         .padding(.horizontal, 20)
                         .padding(.bottom, 40)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
                     } else {
                         VStack(alignment: .leading, spacing: 24) {
                             GuideStep(num: "1", title: "쓰기 사용법 준비중", desc: "쓰기/단어 자동화 기능은 추후 업데이트될 예정입니다.")
@@ -364,6 +389,7 @@ struct GuideView: View {
                         .liquidGlass()
                         .padding(.horizontal, 20)
                         .padding(.bottom, 40)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                     }
                 }
             }
@@ -428,7 +454,9 @@ struct ContentView: View {
                 VStack(spacing: 16) {
                     HStack(spacing: 6) {
                         Button(action: {
-                            vm.loadInitialURL()
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                vm.loadInitialURL()
+                            }
                         }) {
                             HStack(spacing: 4) {
                                 Circle()
@@ -603,33 +631,39 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .top) { Color.clear.frame(height: 0) }
 
+            // 간지나는 자동화 페이드인/아웃 전환 효과
             if isAutomating {
-                Color.black.opacity(0.6)
-                    .background(.ultraThinMaterial)
-                    .edgesIgnoringSafeArea(.all)
-                    .transition(.opacity)
+                ZStack {
+                    Color.black.opacity(0.65)
+                        .background(.ultraThinMaterial)
+                        .edgesIgnoringSafeArea(.all)
 
-                VStack(spacing: 24) {
-                    VectorSpinnerView()
+                    VStack(spacing: 24) {
+                        VectorSpinnerView()
 
-                    VStack(spacing: 8) {
-                        Text("자동화를 진행하고 있습니다!")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
+                        VStack(spacing: 8) {
+                            Text("자동화를 진행하고 있습니다!")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
 
-                        Text("잠시만 기다려주세요.\n작업이 완료되면 자동으로 종료됩니다.")
-                            .font(.system(size: 14, weight: .medium))
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.white.opacity(0.8))
-                            .lineSpacing(4)
+                            Text("잠시만 기다려주세요.\n작업이 완료되면 자동으로 종료됩니다.")
+                                .font(.system(size: 14, weight: .medium))
+                                .multilineTextAlignment(.center)
+                                .foregroundColor(.white.opacity(0.8))
+                                .lineSpacing(4)
+                        }
                     }
+                    .padding(40)
+                    .background(.ultraThinMaterial)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(24)
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                    .padding(30)
+                    .scaleEffect(isAutomating ? 1.0 : 0.8)
+                    .opacity(isAutomating ? 1.0 : 0.0)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isAutomating)
                 }
-                .padding(40)
-                .background(.ultraThinMaterial)
-                .background(Color.black.opacity(0.3))
-                .cornerRadius(24)
-                .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
-                .padding(30)
+                .transition(.opacity)
             }
 
             if isDelaying {
@@ -654,7 +688,9 @@ struct ContentView: View {
                                 
                                 HStack(spacing: 10) {
                                     Button(action: {
-                                        withAnimation { isYouTubeMinimized.toggle() }
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { 
+                                            isYouTubeMinimized.toggle() 
+                                        }
                                     }) {
                                         Image(systemName: isYouTubeMinimized ? "arrow.up.left.and.arrow.down.right" : "minus.rectangle.fill")
                                             .font(.system(size: 22))
@@ -728,7 +764,7 @@ struct ContentView: View {
                             }
                             
                             Button(action: {
-                                withAnimation {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                     showYouTube = true
                                     isYouTubeMinimized = false
                                 }
@@ -753,6 +789,7 @@ struct ContentView: View {
                         .cornerRadius(24)
                         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
                         .padding(30)
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
                 .transition(.opacity)
@@ -851,7 +888,6 @@ struct ContentView: View {
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
                 
-                // 안내 문구 수정: 저장 후 설정버튼 가장 오른쪽 빨간색 닫기 버튼 안내 덧대기
                 showTopMostAlert(message: "이제 저장해도 좋습니다. 저장하고 나서 설정버튼에서 가장 오른쪽에 있는 빨간색 닫기 버튼을 누르면 미수행학습목록으로 이동합니다.") {
                     vm.executeStep04()
                 }
@@ -919,10 +955,11 @@ struct SettingsView: View {
                     Text("설정")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                     Spacer()
+                    // 가장 오른쪽에 위치한 빨간색 닫기 버튼 (요청 반영)
                     Button(action: { presentationMode.wrappedValue.dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 26))
-                            .foregroundColor(.primary.opacity(0.6))
+                            .font(.system(size: 28))
+                            .foregroundColor(.red)
                     }
                 }
                 .padding(.top, 24)
@@ -1190,7 +1227,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 팝업닫기 버튼 누를 때 요구하신 미수행학습목록 페이지 주소로 이동하도록 수정
+    // 미수행학습목록 페이지 주소로 이동
     func closePopup() {
         if let url = URL(string: "https://ssdasa.exam4me.com/_student/studentHome2.jsp") {
             self.webView.load(URLRequest(url: url))
