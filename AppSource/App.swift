@@ -24,7 +24,6 @@ struct Exam4meApp: App {
                     ContentView()
                 }
             }
-            // 시스템 테마 연동 설정 반영
             .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
             .accentColor(customAccentColor)
         }
@@ -1272,9 +1271,9 @@ struct ContentView: View {
                             }
                         }
 
-                        // 웹뷰 멀티탭 / 즐겨찾는 페이지 바로가기 퀵 메뉴바 추가
+                        // 웹뷰 퀵 메뉴바 (글자 잘림 방지 및 요청하신 정확한 링크 반영)
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 QuickMenuButton(title: "홈", icon: "house.fill") {
                                     vm.loadSpecificURL("https://ssdasa.exam4me.com")
                                 }
@@ -1282,7 +1281,10 @@ struct ContentView: View {
                                     vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/studentHome2.jsp")
                                 }
                                 QuickMenuButton(title: "미수행 목록", icon: "list.bullet.clipboard.fill") {
-                                    vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/studentHome2.jsp")
+                                    let formatter = DateFormatter()
+                                    formatter.dateFormat = "yyyy-MM"
+                                    let yearMonthStr = formatter.string(from: Date())
+                                    vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/hwDoList2.jsp?yearMonth=\(yearMonthStr)&doYn=N")
                                 }
                                 QuickMenuButton(title: "마이페이지", icon: "gearshape.2.fill") {
                                     vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/myPage.jsp")
@@ -1820,7 +1822,7 @@ struct ContentView: View {
     }
 }
 
-// 퀵 메뉴 버튼 컴포넌트
+// 퀵 메뉴 버튼 컴포넌트 (글자 잘림 방지를 위해 패딩과 글자 크기 최적화)
 struct QuickMenuButton: View {
     let title: String
     let icon: String
@@ -1828,15 +1830,16 @@ struct QuickMenuButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
+                    .lineLimit(1)
             }
             .foregroundColor(.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
             .background(Color.primary.opacity(0.06))
             .cornerRadius(10)
             .overlay(
@@ -1898,7 +1901,6 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
-                        // 학습 통계 및 수행 기록 대시보드 섹션
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 Image(systemName: "chart.bar.fill")
@@ -1954,7 +1956,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        // 커스텀 테마 설정 섹션
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 Image(systemName: "paintbrush.fill")
@@ -1995,7 +1996,6 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        // 다크/라이트 모드 및 시스템 설정 연동 옵션
                         VStack(alignment: .leading, spacing: 16) {
                             Toggle(isOn: $useSystemTheme) {
                                 HStack {
@@ -2149,7 +2149,6 @@ struct SettingsView: View {
                             .liquidGlass()
                         }
                         
-                        // 자동 업데이트 알림 및 원클릭 인앱 다운로드 섹션
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
@@ -2342,7 +2341,6 @@ struct SettingsView: View {
         }
     }
     
-    // GitHub Releases API를 통해 최신 버전 체크 수행
     private func checkForUpdates() {
         isCheckingUpdate = true
         guard let url = URL(string: "https://api.github.com/repos/doorbellchoonja/exam4me-auto/releases/latest") else {
