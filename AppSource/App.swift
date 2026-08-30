@@ -6,6 +6,7 @@ import Network
 struct Exam4meApp: App {
     @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("customAccentColor") private var customAccentColorName = "blue"
     @State private var isLoading = true
     @StateObject private var networkMonitor = NetworkMonitor()
 
@@ -23,6 +24,17 @@ struct Exam4meApp: App {
                 }
             }
             .preferredColorScheme(isDarkMode ? .dark : .light)
+            .accentColor(customAccentColor)
+        }
+    }
+    
+    var customAccentColor: Color {
+        switch customAccentColorName {
+        case "purple": return .purple
+        case "green": return .green
+        case "orange": return .orange
+        case "pink": return .pink
+        default: return .blue
         }
     }
 }
@@ -220,6 +232,7 @@ extension View {
 
 struct DynamicBackground: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("customThemeStyle") private var themeStyle = "blue"
     @State private var animateGlow = false
     
     var body: some View {
@@ -228,21 +241,21 @@ struct DynamicBackground: View {
                 .edgesIgnoringSafeArea(.all)
             
             Circle()
-                .fill(Color.blue.opacity(isDarkMode ? 0.35 : 0.45))
+                .fill(primaryGlowColor.opacity(isDarkMode ? 0.35 : 0.45))
                 .blur(radius: 90)
                 .frame(width: 320, height: 320)
                 .offset(x: animateGlow ? -130 : 110, y: animateGlow ? -220 : -180)
                 .animation(Animation.easeInOut(duration: 6).repeatForever(autoreverses: true), value: animateGlow)
             
             Circle()
-                .fill(Color.purple.opacity(isDarkMode ? 0.35 : 0.45))
+                .fill(secondaryGlowColor.opacity(isDarkMode ? 0.35 : 0.45))
                 .blur(radius: 90)
                 .frame(width: 320, height: 320)
                 .offset(x: animateGlow ? 140 : -120, y: animateGlow ? 220 : 170)
                 .animation(Animation.easeInOut(duration: 7).repeatForever(autoreverses: true), value: animateGlow)
                 
             Circle()
-                .fill(Color.cyan.opacity(isDarkMode ? 0.25 : 0.35))
+                .fill(accentGlowColor.opacity(isDarkMode ? 0.25 : 0.35))
                 .blur(radius: 90)
                 .frame(width: 280, height: 280)
                 .offset(x: animateGlow ? -60 : 70, y: animateGlow ? 380 : 420)
@@ -250,6 +263,36 @@ struct DynamicBackground: View {
         }
         .onAppear {
             animateGlow = true
+        }
+    }
+    
+    var primaryGlowColor: Color {
+        switch themeStyle {
+        case "purple": return .purple
+        case "green": return .mint
+        case "orange": return .orange
+        case "pink": return .pink
+        default: return .blue
+        }
+    }
+    
+    var secondaryGlowColor: Color {
+        switch themeStyle {
+        case "purple": return .pink
+        case "green": return .blue
+        case "orange": return .red
+        case "pink": return .purple
+        default: return .purple
+        }
+    }
+    
+    var accentGlowColor: Color {
+        switch themeStyle {
+        case "purple": return .cyan
+        case "green": return .green
+        case "orange": return .yellow
+        case "pink": return .orange
+        default: return .cyan
         }
     }
 }
@@ -263,14 +306,14 @@ struct VectorSpinnerView: View {
         ZStack {
             Circle()
                 .trim(from: 0, to: outerTrim)
-                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 .frame(width: 95, height: 95)
                 .rotationEffect(.degrees(isRotating ? 360 : 0))
                 .animation(Animation.linear(duration: 1.2).repeatForever(autoreverses: false), value: isRotating)
             
             Circle()
                 .trim(from: 0.2, to: innerTrim)
-                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.45), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .stroke(Color.accentColor.opacity(0.45), style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .frame(width: 70, height: 70)
                 .rotationEffect(.degrees(isRotating ? -360 : 0))
                 .animation(Animation.linear(duration: 1.6).repeatForever(autoreverses: false), value: isRotating)
@@ -458,7 +501,7 @@ struct GuideView: View {
                             .foregroundColor(selectedTab == .listening ? .white : .primary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(selectedTab == .listening ? Color.blue : Color.primary.opacity(0.05))
+                            .background(selectedTab == .listening ? Color.accentColor : Color.primary.opacity(0.05))
                             .cornerRadius(10)
                     }
 
@@ -470,7 +513,7 @@ struct GuideView: View {
                             .foregroundColor(selectedTab == .writing ? .white : .primary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(selectedTab == .writing ? Color.purple : Color.primary.opacity(0.05))
+                            .background(selectedTab == .writing ? Color.accentColor : Color.primary.opacity(0.05))
                             .cornerRadius(10)
                     }
 
@@ -482,7 +525,7 @@ struct GuideView: View {
                             .foregroundColor(selectedTab == .faq ? .white : .primary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(selectedTab == .faq ? Color.orange : Color.primary.opacity(0.05))
+                            .background(selectedTab == .faq ? Color.accentColor : Color.primary.opacity(0.05))
                             .cornerRadius(10)
                     }
                 }
@@ -608,7 +651,7 @@ struct GuideStep: View {
                 .font(.system(size: 16, weight: .heavy))
                 .foregroundColor(.white)
                 .frame(width: 28, height: 28)
-                .background(Color.blue)
+                .background(Color.accentColor)
                 .clipShape(Circle())
             
             VStack(alignment: .leading, spacing: 6) {
@@ -696,6 +739,59 @@ class ServerStatusManager: ObservableObject {
     func stopRealtimeSpeedTracking() {
         speedTimer?.invalidate()
         speedTimer = nil
+    }
+}
+
+// 학습 통계 기록 관리 매니저
+class StudyStatsManager: ObservableObject {
+    @AppStorage("todayListeningCount") var todayListeningCount: Int = 0
+    @AppStorage("todayWritingCount") var todayWritingCount: Int = 0
+    @AppStorage("todayStudySeconds") var todayStudySeconds: Int = 0
+    @AppStorage("lastRecordDate") var lastRecordDate: String = ""
+
+    init() {
+        checkAndResetDailyStats()
+    }
+
+    func addListening() {
+        checkAndResetDailyStats()
+        todayListeningCount += 1
+    }
+
+    func addWriting() {
+        checkAndResetDailyStats()
+        todayWritingCount += 1
+    }
+
+    func addStudyTime(seconds: Int) {
+        checkAndResetDailyStats()
+        todayStudySeconds += seconds
+    }
+
+    private func checkAndResetDailyStats() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let todayStr = formatter.string(from: Date())
+
+        if lastRecordDate != todayStr {
+            todayListeningCount = 0
+            todayWritingCount = 0
+            todayStudySeconds = 0
+            lastRecordDate = todayStr
+        }
+    }
+
+    var formattedStudyTime: String {
+        let hours = todayStudySeconds / 3600
+        let minutes = (todayStudySeconds % 3600) / 60
+        let seconds = todayStudySeconds % 60
+        if hours > 0 {
+            return String(format: "%d시간 %d분", hours, minutes)
+        } else if minutes > 0 {
+            return String(format: "%d분 %d초", minutes, seconds)
+        } else {
+            return String(format: "%d초", seconds)
+        }
     }
 }
 
@@ -1024,6 +1120,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 struct ContentView: View {
     @StateObject private var vm = WebViewModel()
     @StateObject private var serverManager = ServerStatusManager()
+    @StateObject private var statsManager = StudyStatsManager()
     
     @State private var answerInput: String = ""
     @State private var delayMinutes: Int = 10
@@ -1068,7 +1165,7 @@ struct ContentView: View {
                     if isDeveloperMode && enableSpeedViewer {
                         HStack(spacing: 6) {
                             Image(systemName: "gauge.with.needle.fill")
-                                .foregroundColor(.cyan)
+                                .foregroundColor(.accentColor)
                             Text("실시간 속도:")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.secondary)
@@ -1167,7 +1264,7 @@ struct ContentView: View {
                                 title: "Listening",
                                 count: vm.listeningCount,
                                 icon: "headphones",
-                                color: Color.blue
+                                color: Color.accentColor
                             )
                             StatusBadge(
                                 title: "Vocabulary",
@@ -1204,11 +1301,9 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 12)
-                                    .background(
-                                        LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                    )
+                                    .background(Color.accentColor)
                                     .cornerRadius(14)
-                                    .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 3)
+                                    .shadow(color: Color.accentColor.opacity(0.4), radius: 6, x: 0, y: 3)
                                 }
                                 
                                 Button(action: {
@@ -1276,7 +1371,7 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing))
+                    .background(LinearGradient(colors: [.purple, Color.accentColor], startPoint: .leading, endPoint: .trailing))
                     .cornerRadius(20)
                     .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                 }
@@ -1400,7 +1495,7 @@ struct ContentView: View {
                                     .trim(from: 0, to: 0.85)
                                     .stroke(
                                         AngularGradient(
-                                            gradient: Gradient(colors: [.cyan, .blue, .purple, .cyan]),
+                                            gradient: Gradient(colors: [.cyan, Color.accentColor, .purple, .cyan]),
                                             center: .center
                                         ),
                                         style: StrokeStyle(lineWidth: 10, lineCap: .round)
@@ -1477,7 +1572,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
+            SettingsView(serverManager: serverManager, statsManager: statsManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
         }
         .sheet(isPresented: $showGuide) {
             GuideView()
@@ -1509,7 +1604,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Color.blue)
+                            .background(Color.accentColor)
                             .cornerRadius(12)
                     }
                     
@@ -1573,6 +1668,8 @@ struct ContentView: View {
             Button("학습시작 1") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
+                    statsManager.addListening()
+                    statsManager.addStudyTime(seconds: 30) // 학습 수행 시간 가산
                     withAnimation { isAutomating = true }
                     vm.executeRoutine1(target: target, answers: answers) {
                         withAnimation { isAutomating = false }
@@ -1581,6 +1678,8 @@ struct ContentView: View {
                 }
             }
             Button("학습시작 2") {
+                statsManager.addWriting()
+                statsManager.addStudyTime(seconds: 20)
                 withAnimation { isAutomating = true }
                 vm.executeRoutine2 {
                     withAnimation { isAutomating = false }
@@ -1654,6 +1753,7 @@ struct ContentView: View {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { t in
             if remainingSeconds > 0 {
                 remainingSeconds -= 1
+                statsManager.addStudyTime(seconds: 1) // 뻐기기 시간도 학습 통계 시간에 누적
             } else {
                 t.invalidate()
                 withAnimation { 
@@ -1692,6 +1792,7 @@ struct ContentView: View {
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var serverManager: ServerStatusManager
+    @ObservedObject var statsManager: StudyStatsManager
     @Binding var testOfflineAlert: Bool
     @Binding var testServerDownAlert: Bool
     @Binding var testSlowNetworkAlert: Bool
@@ -1700,6 +1801,7 @@ struct SettingsView: View {
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     @AppStorage("enableSpeedViewer") private var enableSpeedViewer = false
+    @AppStorage("customThemeStyle") private var themeStyle = "blue"
 
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
@@ -1719,7 +1821,7 @@ struct SettingsView: View {
             
             VStack(spacing: 24) {
                 HStack {
-                    Text("설정")
+                    Text("설정 & 통계")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                     Spacer()
                     Button(action: { presentationMode.wrappedValue.dismiss() }) {
@@ -1734,6 +1836,83 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         
+                        // 학습 통계 및 수행 기록 대시보드 섹션
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Image(systemName: "chart.bar.fill")
+                                    .foregroundColor(.accentColor)
+                                Text("오늘의 학습 통계 대시보드")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                            }
+                            
+                            HStack(spacing: 12) {
+                                VStack(spacing: 6) {
+                                    Text("듣기 완료")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                    Text("\(statsManager.todayListeningCount)회")
+                                        .font(.system(size: 18, weight: .heavy))
+                                        .foregroundColor(.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.primary.opacity(0.05))
+                                .cornerRadius(12)
+                                
+                                VStack(spacing: 6) {
+                                    Text("쓰기 완료")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                    Text("\(statsManager.todayWritingCount)회")
+                                        .font(.system(size: 18, weight: .heavy))
+                                        .foregroundColor(.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.primary.opacity(0.05))
+                                .cornerRadius(12)
+                                
+                                VStack(spacing: 6) {
+                                    Text("총 학습 시간")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                    Text(statsManager.formattedStudyTime)
+                                        .font(.system(size: 15, weight: .heavy))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.primary.opacity(0.05))
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(20)
+                        .liquidGlass()
+
+                        // 커스텀 테마 및 배경 색상 커스텀 섹션
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Image(systemName: "paintbrush.fill")
+                                    .foregroundColor(.pink)
+                                Text("커스텀 테마 & 분위기 설정")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                            }
+                            
+                            HStack(spacing: 12) {
+                                ThemeButton(title: "블루", color: .blue, currentTheme: $themeStyle, themeKey: "blue")
+                                ThemeButton(title: "퍼플", color: .purple, currentTheme: $themeStyle, themeKey: "purple")
+                                ThemeButton(title: "민트", color: .mint, currentTheme: $themeStyle, themeKey: "green")
+                                ThemeButton(title: "오렌지", color: .orange, currentTheme: $themeStyle, themeKey: "orange")
+                                ThemeButton(title: "핑크", color: .pink, currentTheme: $themeStyle, themeKey: "pink")
+                            }
+                        }
+                        .padding(20)
+                        .liquidGlass()
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "server.rack")
@@ -1763,7 +1942,7 @@ struct SettingsView: View {
                                         .font(.system(size: 16, weight: .bold))
                                 }
                             }
-                            .tint(.blue)
+                            .tint(.accentColor)
                         }
                         .padding(20)
                         .liquidGlass()
@@ -1839,7 +2018,7 @@ struct SettingsView: View {
                                             .font(.system(size: 15, weight: .semibold))
                                     }
                                 }
-                                .tint(.orange)
+                                .tint(.accentColor)
                                 
                                 Divider().background(Color.primary.opacity(0.1))
                                 
@@ -1943,7 +2122,7 @@ struct SettingsView: View {
                             
                             Button(action: { showBugReportAlert = true }) {
                                 HStack {
-                                    Text("App 버그 및 신고")
+                                    Text("앱 버그 및 신고")
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundColor(.primary)
                                     Spacer()
@@ -2004,10 +2183,10 @@ struct SettingsView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 12)
                                     .background(
-                                        showCopyToast ? Color.green : Color.blue
+                                        showCopyToast ? Color.green : Color.accentColor
                                     )
                                     .cornerRadius(14)
-                                    .shadow(color: (showCopyToast ? Color.green : Color.blue).opacity(0.3), radius: 5)
+                                    .shadow(color: Color.accentColor.opacity(0.3), radius: 5)
                                 }
                             }
                             
@@ -2052,7 +2231,6 @@ struct SettingsView: View {
         }
     }
     
-    private func styleShareButton() {}
     private func shareApp() {
         let repoURL = "https://doorbellchoonja.github.io/exam4me-auto"
         guard let url = URL(string: repoURL) else { return }
@@ -2075,6 +2253,44 @@ struct SettingsView: View {
             }
             
             topController.present(activityVC, animated: true, completion: nil)
+        }
+    }
+}
+
+struct ThemeButton: View {
+    let title: String
+    let color: Color
+    @Binding var currentTheme: String
+    let themeKey: String
+    
+    var body: some View {
+        Button(action: {
+            withAnimation {
+                currentTheme = themeKey
+            }
+        }) {
+            VStack(spacing: 6) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: currentTheme == themeKey ? 3 : 0)
+                    )
+                    .shadow(color: color.opacity(0.4), radius: 4, x: 0, y: 2)
+                
+                Text(title)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(currentTheme == themeKey ? .primary : .secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(currentTheme == themeKey ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(currentTheme == themeKey ? color.opacity(0.5) : Color.clear, lineWidth: 1.5)
+            )
         }
     }
 }
