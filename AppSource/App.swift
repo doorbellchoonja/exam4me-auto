@@ -936,8 +936,10 @@ struct SettingsView: View {
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
     @State private var showUpdateAlert = false
+    @State private var showSecretMeaningAlert = false // "이게 뭔가요?" 버튼 알림 제어용 변수
     
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    let creatorHash = "MFG9PlaS0OqGqprd52Hj2aRCvViotKNeNR8Rot64EhQ="
 
     var body: some View {
         ZStack {
@@ -970,6 +972,41 @@ struct SettingsView: View {
                                 }
                             }
                             .tint(.blue)
+                        }
+                        .padding(20)
+                        .liquidGlass()
+                        
+                        // 제작자 정보 및 "이게 뭔가요?" 버튼 추가 섹션
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Image(systemName: "person.badge.key.fill")
+                                    .foregroundColor(.purple)
+                                Text("제작자 정보")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(creatorHash)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.8)
+                                    .textSelection(.enabled)
+                                
+                                Button(action: {
+                                    showSecretMeaningAlert = true
+                                }) {
+                                    Text("이게 뭔가요?")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(Color.purple)
+                                        .cornerRadius(10)
+                                        .shadow(color: Color.purple.opacity(0.3), radius: 4, x: 0, y: 2)
+                                }
+                            }
                         }
                         .padding(20)
                         .liquidGlass()
@@ -1105,6 +1142,12 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        // "이게 뭔가요?" 버튼 클릭 시 요청하신 안내 문구 출력
+        .alert("안내", isPresented: $showSecretMeaningAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("알아서 암호화한거 푸세요.")
+        }
         .alert("안내", isPresented: $showBugReportAlert) {
             Button("확인", role: .cancel) {}
         } message: {
