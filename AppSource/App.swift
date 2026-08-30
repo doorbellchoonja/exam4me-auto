@@ -360,7 +360,6 @@ struct ContentView: View {
     @State private var isDelaying: Bool = false
     @State private var showDelayAlert: Bool = false
     
-    // 단계별 다이얼로그 상태 분리 (1단계: 학습 유형 선택, 2단계: 학습시작 1/2 선택)
     @State private var showTaskTypeDialog: Bool = false
     @State private var showListeningActionDialog: Bool = false
     
@@ -373,6 +372,7 @@ struct ContentView: View {
     
     @State private var showYouTube: Bool = false
     @State private var isYouTubeMinimized: Bool = false
+    @State private var showCancelDelayConfirm: Bool = false
 
     var body: some View {
         ZStack {
@@ -574,114 +574,132 @@ struct ContentView: View {
             }
 
             if isDelaying {
-                Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.6)
-                    .background(.ultraThinMaterial)
-                    .edgesIgnoringSafeArea(.all)
-                    .transition(.opacity)
+                ZStack {
+                    Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.6)
+                        .background(.ultraThinMaterial)
+                        .edgesIgnoringSafeArea(.all)
 
-                if showYouTube && !isYouTubeMinimized {
-                    ZStack {
+                    if showYouTube {
                         YouTubeWebViewContainer(urlString: "https://www.youtube.com")
-                        
-                        VStack {
-                            HStack {
-                                Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
-                                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(Color.black.opacity(0.7))
-                                    .cornerRadius(12)
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 1))
-                                
-                                Spacer()
-                                
+                            .opacity(isYouTubeMinimized ? 0 : 1)
+                            .allowsHitTesting(!isYouTubeMinimized)
+                            .edgesIgnoringSafeArea(.all)
+                    }
+
+                    VStack {
+                        HStack {
+                            Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Color.black.opacity(0.7))
+                                .cornerRadius(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                            
+                            Spacer()
+                            
+                            // 최소화 / 다시 열기 토글 버튼 및 닫기 버튼
+                            HStack(spacing: 10) {
                                 Button(action: {
-                                    withAnimation { isYouTubeMinimized = true }
+                                    withAnimation { isYouTubeMinimized.toggle() }
                                 }) {
-                                    Image(systemName: "minus.rectangle.fill")
-                                        .font(.system(size: 26))
+                                    Image(systemName: isYouTubeMinimized ? "arrow.up.left.and.arrow.down.right" : "minus.rectangle.fill")
+                                        .font(.system(size: 22))
                                         .foregroundColor(.white)
+                                        .padding(8)
                                         .background(Color.black.opacity(0.7))
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                            
-                            Spacer()
-                        }
-                    }
-                    .transition(.move(edge: .bottom))
-                } else {
-                    VStack(spacing: 24) {
-                        ZStack {
-                            Circle()
-                                .stroke(Color.white.opacity(0.1), lineWidth: 10)
-                                .frame(width: 150, height: 150)
 
-                            Circle()
-                                .trim(from: 0, to: 0.85)
-                                .stroke(
-                                    AngularGradient(
-                                        gradient: Gradient(colors: [.cyan, .blue, .purple, .cyan]),
-                                        center: .center
-                                    ),
-                                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                                )
-                                .frame(width: 150, height: 150)
-                                .rotationEffect(.degrees(Double(remainingSeconds) * 6))
-                                .animation(.linear(duration: 1), value: remainingSeconds)
-
-                            VStack(spacing: 4) {
-                                Image(systemName: "hourglass")
-                                    .font(.system(size: 26))
-                                    .foregroundColor(.cyan)
-                                Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
-                                    .font(.system(size: 30, weight: .heavy, design: .rounded))
-                                    .foregroundColor(.white)
+                                Button(action: {
+                                    showCancelDelayConfirm = true
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundColor(.white)
+                                        .background(Color.black.opacity(0.7))
+                                        .clipShape(Circle())
+                                }
                             }
                         }
-
-                        VStack(spacing: 8) {
-                            Text("뻐기는중입니다!")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
-
-                            Text("앱을 닫으면 뻐기기에 실패하니\n앱을 열고있어주세요!")
-                                .font(.system(size: 14, weight: .medium))
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.white.opacity(0.8))
-                                .lineSpacing(4)
-                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
                         
-                        Button(action: {
-                            withAnimation {
-                                showYouTube = true
-                                isYouTubeMinimized = false
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "play.rectangle.fill")
-                                Text(showYouTube && isYouTubeMinimized ? "유튜브 다시 열기" : "시간뻐기면서 유튜브보기")
-                            }
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 12)
-                            .background(Color.red)
-                            .cornerRadius(14)
-                            .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
-                        }
-                        .padding(.top, 10)
+                        Spacer()
                     }
-                    .padding(40)
-                    .background(.ultraThinMaterial)
-                    .background(Color.black.opacity(0.3))
-                    .cornerRadius(24)
-                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
-                    .padding(30)
+
+                    if isYouTubeMinimized || !showYouTube {
+                        VStack(spacing: 24) {
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 10)
+                                    .frame(width: 150, height: 150)
+
+                                Circle()
+                                    .trim(from: 0, to: 0.85)
+                                    .stroke(
+                                        AngularGradient(
+                                            gradient: Gradient(colors: [.cyan, .blue, .purple, .cyan]),
+                                            center: .center
+                                        ),
+                                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                                    )
+                                    .frame(width: 150, height: 150)
+                                    .rotationEffect(.degrees(Double(remainingSeconds) * 6))
+                                    .animation(.linear(duration: 1), value: remainingSeconds)
+
+                                VStack(spacing: 4) {
+                                    Image(systemName: "hourglass")
+                                        .font(.system(size: 26))
+                                        .foregroundColor(.cyan)
+                                    Text(String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60))
+                                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                            }
+
+                            VStack(spacing: 8) {
+                                Text("뻐기는중입니다!")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.white)
+
+                                Text("앱을 닫으면 뻐기기에 실패하니\n앱을 열고있어주세요!")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .multilineTextAlignment(.center)
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .lineSpacing(4)
+                            }
+                            
+                            Button(action: {
+                                withAnimation {
+                                    showYouTube = true
+                                    isYouTubeMinimized = false
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "play.rectangle.fill")
+                                    Text(showYouTube ? "유튜브 다시 열기" : "시간뻐기면서 유튜브보기")
+                                }
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 12)
+                                .background(Color.red)
+                                .cornerRadius(14)
+                                .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
+                            }
+                            .padding(.top, 10)
+                        }
+                        .padding(40)
+                        .background(.ultraThinMaterial)
+                        .background(Color.black.opacity(0.3))
+                        .cornerRadius(24)
+                        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                        .padding(30)
+                    }
                 }
+                .transition(.opacity)
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -690,14 +708,12 @@ struct ContentView: View {
         .sheet(isPresented: $showGuide) {
             GuideView()
         }
-        // 1단계: 듣기 / 쓰기 선택 팝업
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
                 showListeningActionDialog = true
             }
             Button("📝 쓰기 (Vocabulary - 준비중)", role: .cancel) {}
         }
-        // 2단계: 학습시작 1 / 학습시작 2 선택 팝업
         .confirmationDialog("듣기 평가 자동화 모드를 선택하세요", isPresented: $showListeningActionDialog, titleVisibility: .visible) {
             Button("학습시작 1") {
                 let (target, answers) = parseAnswer(answerInput)
@@ -705,7 +721,6 @@ struct ContentView: View {
                     withAnimation { isAutomating = true }
                     vm.executeRoutine1(target: target, answers: answers) {
                         withAnimation { isAutomating = false }
-                        // 웹뷰 UI에 가려지지 않도록 최상단 루트 컨트롤러로 네이티브 알림창 출력
                         showTopMostAlert(message: "저장에 실패했습니다. 확인 버튼을 누르고 학습시작 2를 눌러주세요.")
                     }
                 }
@@ -730,6 +745,20 @@ struct ContentView: View {
             Button("확인", role: .cancel) {}
         } message: {
             Text("장하현한테 물어보세요.")
+        }
+        .alert("시간 뻐기기 취소", isPresented: $showCancelDelayConfirm) {
+            Button("확인", role: .destructive) {
+                timer?.invalidate()
+                withAnimation {
+                    isDelaying = false
+                    showYouTube = false
+                    isYouTubeMinimized = false
+                }
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("시간을 그만 뻐기겠습니까?")
         }
     }
 
@@ -775,7 +804,6 @@ struct ContentView: View {
         }
     }
 
-    // 웹뷰 위에 가려지지 않고 항상 최상단에서 팝업이 뜨도록 강제하는 함수
     private func showTopMostAlert(message: String, completion: (() -> Void)? = nil) {
         DispatchQueue.main.async {
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -1133,14 +1161,15 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         DispatchQueue.main.async { self.isLoadingWeb = false }
     }
 
+    // 팝업 창 생성 처리 (새창으로 뜨는 링크나 window.open을 기존 웹뷰에 인라인으로 띄워 팝업이 안 닫히는 버그 원인 차단)
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if navigationAction.targetFrame == nil {
-            webView.load(navigationAction.request)
+        if let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame {
+            return nil
         }
+        webView.load(navigationAction.request)
         return nil
     }
 
-    // 팝업창 안 닫히는 오류 수정 (최상단 루트 컨트롤러 기준으로 네이티브 알림 출력)
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         DispatchQueue.main.async {
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -1178,7 +1207,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 학습시작 1: 자동화 진행 후 마지막에 화면 새로고침(location.reload) 추가
     func executeRoutine1(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
 
@@ -1225,7 +1253,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
             if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
 
-            // 마지막 자동화 부분에 화면 새로고침 추가
             location.reload();
             await sleep(1000);
 
@@ -1240,7 +1267,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 학습시작 2: 새로고침 제외하고 goNext(), goNextInfo() 실행
     func executeRoutine2(completion: @escaping () -> Void) {
         let script = """
         (async function() {
@@ -1260,7 +1286,6 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 시간 뻐기기 완료 후 실행할 자바스크립트
     func executeStep04() {
         let script = """
         (async function() {
