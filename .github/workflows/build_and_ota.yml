@@ -226,16 +226,14 @@ jobs:
                   .btn-primary { background-color: #007aff; color: white; box-shadow: 0 4px 10px rgba(0,122,255,0.25); }
               </style>
               <script>
-                  // 페이지 진입 시점에 이전에 새로고침 플래그가 없으면 즉시 새로고침 강제 실행 (접속할 때마다 무조건 갱신)
-                  window.addEventListener('pageshow', function(event) {
-                      if (!sessionStorage.getItem('refreshed_page')) {
-                          sessionStorage.setItem('refreshed_page', 'true');
-                          window.location.reload();
+                  // 세션당 최초 1회만 자동 새로고침 수행
+                  window.addEventListener('load', function() {
+                      if (!sessionStorage.getItem('reloaded_once')) {
+                          sessionStorage.setItem('reloaded_once', 'true');
+                          setTimeout(function() {
+                              window.location.reload(true);
+                          }, 300);
                       }
-                  });
-                  // 브라우저를 완전히 닫거나 탭을 나갔다 들어올 때 다시 리프레시될 수 있도록 페이지를 떠날 때 플래그 초기화
-                  window.addEventListener('pagehide', function() {
-                      sessionStorage.removeItem('refreshed_page');
                   });
 
                   function installApp() {
