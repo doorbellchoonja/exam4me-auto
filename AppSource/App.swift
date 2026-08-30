@@ -89,6 +89,77 @@ struct OfflineView: View {
     }
 }
 
+// 자동 OTA 업데이트 알림 팝업 뷰
+struct OTAUpdateOverlayView: View {
+    let latestVersion: String
+    @Binding var isPresented: Bool
+    @State private var isAnimating = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .background(.ultraThinMaterial)
+                .edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 24) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.green)
+                    .scaleEffect(isAnimating ? 1.1 : 0.9)
+                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isAnimating)
+                    .onAppear { isAnimating = true }
+                
+                VStack(spacing: 8) {
+                    Text("새로운 업데이트 발견")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Text("최신 버전(v\(latestVersion))이 출시되었습니다.\n지금 바로 OTA로 간편하게 업데이트하세요!")
+                        .font(.system(size: 14, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
+                }
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        withAnimation {
+                            isPresented = false
+                        }
+                    }) {
+                        Text("나중에 하기")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.primary.opacity(0.05))
+                            .cornerRadius(12)
+                    }
+                    
+                    Button(action: {
+                        let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
+                        if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
+                            UIApplication.shared.open(otaURL)
+                        }
+                    }) {
+                        Text("업데이트 설치")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.green)
+                            .cornerRadius(12)
+                            .shadow(color: Color.green.opacity(0.3), radius: 5, x: 0, y: 3)
+                    }
+                }
+            }
+            .padding(32)
+            .liquidGlass()
+            .padding(24)
+        }
+    }
+}
+
 struct SlowNetworkOverlayView: View {
     @Binding var isPresented: Bool
     var isTestMode: Bool = false
@@ -1162,6 +1233,10 @@ struct ContentView: View {
     @State private var testServerDownAlert = false
     @State private var testSlowNetworkAlert = false
 
+    // 앱 진입 시 자동 업데이트 체크를 위한 상태값
+    @State private var showAutoUpdateModal = false
+    @State private var latestVersionFound = ""
+
     @State private var floatingButtonOffset = CGSize(width: 120, height: 250)
     @State private var showJSSheet = false
     @State private var customJSInput = ""
@@ -1271,7 +1346,7 @@ struct ContentView: View {
                             }
                         }
 
-                        // 웹뷰 퀵 메뉴바 (글자 잘림 방지 및 요청하신 정확한 링크 반영)
+                        // 웹뷰 퀵 메뉴바 (미수행 목록 링크에 현재 연도와 월 실시간 반영)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 QuickMenuButton(title: "홈", icon: "house.fill") {
@@ -1603,6 +1678,11 @@ struct ContentView: View {
             if testSlowNetworkAlert {
                 SlowNetworkOverlayView(isPresented: $testSlowNetworkAlert, isTestMode: true)
             }
+
+            // 앱 진입 시 자동 업데이트 알림 모달
+            if showAutoUpdateModal {
+                OTAUpdateOverlayView(latestVersion: latestVersionFound, isPresented: $showAutoUpdateModal)
+            }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView(serverManager: serverManager, statsManager: statsManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert, testSlowNetworkAlert: $testSlowNetworkAlert)
@@ -1757,7 +1837,31 @@ struct ContentView: View {
                     }
                 }
             }
+            
+            // 앱 진입 시 자동으로 최신 버전 체크 실행
+            checkStartupUpdate()
         }
+    }
+
+    private func checkStartupUpdate() {
+        guard let url = URL(string: "https://api.github.com/repos/doorbellchoonja/exam4me-auto/releases/latest") else { return }
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            guard let data = data, error == nil else { return }
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                   let tagName = json["tag_name"] as? String {
+                    let cleanTag = tagName.replacingOccurrences(of: "v", with: "")
+                    if cleanTag != currentVersion {
+                        DispatchQueue.main.async {
+                            latestVersionFound = cleanTag
+                            showAutoUpdateModal = true
+                        }
+                    }
+                }
+            } catch {}
+        }.resume()
     }
 
     private func hideKeyboard() {
@@ -1822,7 +1926,6 @@ struct ContentView: View {
     }
 }
 
-// 퀵 메뉴 버튼 컴포넌트 (글자 잘림 방지를 위해 패딩과 글자 크기 최적화)
 struct QuickMenuButton: View {
     let title: String
     let icon: String
@@ -1869,7 +1972,6 @@ struct SettingsView: View {
     @State private var showBugReportAlert = false
     @State private var showSecretMeaningAlert = false
     @State private var latestVersion: String = ""
-    @State private var updateDownloadURL: String = ""
     @State private var hasNewUpdate: Bool = false
     @State private var isCheckingUpdate: Bool = false
     
@@ -2179,11 +2281,12 @@ struct SettingsView: View {
                                 }
                                 
                                 Button(action: {
-                                    if let url = URL(string: updateDownloadURL) {
-                                        UIApplication.shared.open(url)
+                                    let manifestURL = "https://doorbellchoonja.github.io/exam4me-auto/manifest.plist"
+                                    if let otaURL = URL(string: "itms-services://?action=download-manifest&url=\(manifestURL)") {
+                                        UIApplication.shared.open(otaURL)
                                     }
                                 }) {
-                                    Text("원클릭 최신 버전 다운로드")
+                                    Text("원클릭 OTA 다이렉트 업데이트")
                                         .font(.system(size: 15, weight: .bold))
                                         .foregroundColor(.white)
                                         .frame(maxWidth: .infinity)
@@ -2348,17 +2451,15 @@ struct SettingsView: View {
             return
         }
         
-        URLSession.shared.dataTask(with: url) { data, response, error in
+        URLSession.shared.dataTask(with: url) { data, _, error in
             DispatchQueue.main.async {
                 isCheckingUpdate = false
                 guard let data = data, error == nil else { return }
                 do {
                     if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-                       let tagName = json["tag_name"] as? String,
-                       let htmlUrl = json["html_url"] as? String {
+                       let tagName = json["tag_name"] as? String {
                         let cleanTag = tagName.replacingOccurrences(of: "v", with: "")
                         latestVersion = cleanTag
-                        updateDownloadURL = htmlUrl
                         
                         if cleanTag != currentAppVersion {
                             hasNewUpdate = true
