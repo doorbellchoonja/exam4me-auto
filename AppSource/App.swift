@@ -132,7 +132,37 @@ struct DynamicBackground: View {
     }
 }
 
-// 요청하신 loading 3.json 애니메이션 디자인을 완벽 재현한 로딩 뷰
+struct VectorSpinnerView: View {
+    @State private var isRotating = false
+    @State private var outerTrim: CGFloat = 0.05
+    @State private var innerTrim: CGFloat = 0.1
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .trim(from: 0, to: outerTrim)
+                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                .frame(width: 95, height: 95)
+                .rotationEffect(.degrees(isRotating ? 360 : 0))
+                .animation(Animation.linear(duration: 1.2).repeatForever(autoreverses: false), value: isRotating)
+            
+            Circle()
+                .trim(from: 0.2, to: innerTrim)
+                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.45), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .frame(width: 70, height: 70)
+                .rotationEffect(.degrees(isRotating ? -360 : 0))
+                .animation(Animation.linear(duration: 1.6).repeatForever(autoreverses: false), value: isRotating)
+        }
+        .onAppear {
+            isRotating = true
+            withAnimation(Animation.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                outerTrim = 0.68
+                innerTrim = 0.75
+            }
+        }
+    }
+}
+
 struct LoadingView: View {
     @Binding var isLoading: Bool
     @State private var isAnimating = false
@@ -142,7 +172,6 @@ struct LoadingView: View {
             DynamicBackground()
             
             VStack(spacing: 32) {
-                // JSON 로딩 바 애니메이션 구현
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 5)
                         .fill(Color.gray.opacity(0.3))
@@ -369,7 +398,7 @@ struct GuideView: View {
                                 .padding(.leading, 40)
                             }
                             
-                            GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작버튼을 누르고 듣기-학습1순으로 누릅니다. 그리고 '저장에 실패했습니다' 라는 알림창이 뜨면 뒤에 온라인창이 멈추기까지 기다리세요. 온라인창이 멈추면 확인버튼을 누르고 다시 시작버튼-듣기-학습2를 눌러주세요. 그 이후는 안내에 따라 하시면 됩니다.")
+                            GuideStep(num: "4", title: "시작 버튼 누르기", desc: "앱 상단의 답지 입력칸 옆에 있는 시작버튼을 누르고 듣기-학습1순으로 누릅니다. 그리고 '저장에 실패했습니다' 라는 알림창이 뜨면 뒤에 온라인창이 멈추기까지 기다리세요. 온라인창이 멈추기까지 기다린 후 확인버튼을 누르고 다시 시작버튼-듣기-학습2를 눌러주세요.")
                             
                             GuideStep(num: "5", title: "완료", desc: "그 이후는 안내에 따라 하시면 됩니다.")
                         }
@@ -806,7 +835,6 @@ struct ContentView: View {
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     
-    // 앱을 재시작해도 유지되지 않도록 일반 @State로 선언하여 버그 완벽 해결
     @State private var testOfflineAlert = false
     @State private var testServerDownAlert = false
 
