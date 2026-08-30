@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import Network
+import LocalAuthentication
 
 @main
 struct Exam4meApp: App {
@@ -879,7 +880,6 @@ class StudyStatsManager: ObservableObject {
     }
 }
 
-// 매크로 저장소 관리를 위한 전용 매니저 클래스 (불변성 오류 방지)
 class JSMacroManager: ObservableObject {
     @AppStorage("savedJSMacros") var savedMacrosData: String = "[]"
 
@@ -1903,7 +1903,6 @@ struct ContentView: View {
             isYouTubeMinimized = false
             isDarkSleepMode = false
         }
-        // 시간 뻐기기 중 화면 꺼짐 자동 방지
         UIApplication.shared.isIdleTimerDisabled = true
 
         timer?.invalidate()
@@ -1947,7 +1946,6 @@ struct ContentView: View {
     }
 }
 
-// 사용자 커스텀 자바스크립트 스크립트(매크로) 저장소 뷰
 struct JSExecutionView: View {
     @ObservedObject var vm: WebViewModel
     @Binding var customJSInput: String
@@ -2334,19 +2332,30 @@ struct SettingsView: View {
                                         if creatorTapCount >= 5 {
                                             creatorTapCount = 0
                                             if isDeveloperMode {
-                                                isDeveloperMode = false
-                                                enableFloatingJSButton = false
-                                                enableSpeedViewer = false
-                                                testOfflineAlert = false
-                                                testServerDownAlert = false
-                                                testSlowNetworkAlert = false
-                                                testAutoUpdateAlert = false
-                                                devModeAlertMessage = "개발자모드 비활성화됨"
+                                                // 개발자 모드 해제 시 생체 인증
+                                                authenticateWithFaceID { success in
+                                                    if success {
+                                                        isDeveloperMode = false
+                                                        enableFloatingJSButton = false
+                                                        enableSpeedViewer = false
+                                                        testOfflineAlert = false
+                                                        testServerDownAlert = false
+                                                        testSlowNetworkAlert = false
+                                                        testAutoUpdateAlert = false
+                                                        devModeAlertMessage = "개발자모드 비활성화됨"
+                                                        showDevModeChangeAlert = true
+                                                    }
+                                                }
                                             } else {
-                                                isDeveloperMode = true
-                                                devModeAlertMessage = "개발자모드 활성화됨"
+                                                // 개발자 모드 활성화 시 Face ID 2차 필수 인증
+                                                authenticateWithFaceID { success in
+                                                    if success {
+                                                        isDeveloperMode = true
+                                                        devModeAlertMessage = "개발자모드 활성화됨"
+                                                        showDevModeChangeAlert = true
+                                                    }
+                                                }
                                             }
-                                            showDevModeChangeAlert = true
                                         }
                                     }
                                 
@@ -2377,11 +2386,18 @@ struct SettingsView: View {
                                     Spacer()
                                 }
                                 
-                                Toggle(isOn: $enableFloatingJSButton) {
+                                Toggle(isOn: Binding(
+                                    get: { enableFloatingJSButton },
+                                    set: { newValue in
+                                        authenticateWithFaceID { success in
+                                            if success { enableFloatingJSButton = newValue }
+                                        }
+                                    }
+                                )) {
                                     HStack {
                                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                                             .foregroundColor(.blue)
-                                        Text("자바스크립트 실행버튼 추가")
+                                        Text("자바스크립트 실행버튼 추가 (FaceID 보호)")
                                             .font(.system(size: 15, weight: .semibold))
                                     }
                                 }
@@ -2389,7 +2405,14 @@ struct SettingsView: View {
                                 
                                 Divider().background(Color.primary.opacity(0.1))
                                 
-                                Toggle(isOn: $enableSpeedViewer) {
+                                Toggle(isOn: Binding(
+                                    get: { enableSpeedViewer },
+                                    set: { newValue in
+                                        authenticateWithFaceID { success in
+                                            if success { enableSpeedViewer = newValue }
+                                        }
+                                    }
+                                )) {
                                     HStack {
                                         Image(systemName: "gauge.with.needle.fill")
                                             .foregroundColor(.cyan)
@@ -2624,6 +2647,28 @@ struct SettingsView: View {
         }
     }
     
+    // Face ID / Touch ID 생체 2차 인증 함수
+    private func authenticateWithFaceID(completion: @escaping (Bool) -> Void) {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            let reason = "개발자 설정을 변경하려면 Face ID 또는 기기 암호 인증이 필요합니다."
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, authenticationError in
+                DispatchQueue.main.async {
+                    completion(success)
+                }
+            }
+        } else {
+            // 생체 인식을 지원하지 않거나 설정되지 않은 기기의 경우 기본 암호 인증 fallback
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "개발자 설정 변경을 위해 기기 암호 인증이 필요합니다.") { success, _ in
+                DispatchQueue.main.async {
+                    completion(success)
+                }
+            }
+        }
+    }
+
     private func checkForUpdatesManual() {
         isCheckingUpdate = true
         updateCheckMessage = ""
