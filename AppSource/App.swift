@@ -687,13 +687,24 @@ struct ContentView: View {
             GuideView()
         }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showActionTypeDialog, titleVisibility: .visible) {
-            Button("🎧 듣기평가 (Listening)") {
+            // 학습시작 1과 학습시작 2로 분리
+            Button("🎧 학습시작 1") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
                     withAnimation { isAutomating = true }
-                    vm.executeRoutine(target: target, answers: answers) {
+                    vm.executeRoutine1(target: target, answers: answers) {
                         withAnimation { isAutomating = false }
+                        showAlert("저장에 실패했습니다.") {
+                            // 확인 버튼 누르면 안내 팝업 혹은 대기
+                        }
                     }
+                }
+            }
+            Button("🎧 학습시작 2") {
+                withAnimation { isAutomating = true }
+                vm.executeRoutine2 {
+                    withAnimation { isAutomating = false }
+                    showAlert("이제부터 학습시작2 버튼 오른쪽에 있는 시계모양 시간뻐기기버튼을 눌러서 시간을 뻐기세요.")
                 }
             }
             Button("취소", role: .cancel) {}
@@ -746,16 +757,22 @@ struct ContentView: View {
                     isYouTubeMinimized = false
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
-                showAlert("이제 저장해도 좋습니다.")
+                
+                // 시간 다 뻐기고 난 후 콜백 및 알림창 닫힌 뒤 goStep04('Y') 실행
+                showAlert("이제 저장해도 좋습니다.") {
+                    vm.executeStep04()
+                }
             }
         }
     }
 
-    private func showAlert(_ msg: String) {
+    private func showAlert(_ msg: String, completion: (() -> Void)? = nil) {
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first?.rootViewController else { return }
         let alert = UIAlertController(title: nil, message: msg, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "확인", style: .default))
+        alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in
+            completion?()
+        }))
         
         var topController = root
         while let presented = topController.presentedViewController {
@@ -1111,6 +1128,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         return nil
     }
 
+    // 팝업창 안 닫히는 오류 수정 (웹뷰 표준 Alert 및 Confirm 핸들러)
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let root = scene.windows.first?.rootViewController else {
@@ -1144,8 +1162,8 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         topController.present(alert, animated: true)
     }
 
-    // 극한으로 단축된 초고속 자동화 루프 스크립트
-    func executeRoutine(target: String, answers: [Int], completion: @escaping () -> Void) {
+    // 학습시작 1: 자동화 진행 및 "저장에 실패했습니다" 팝업 처리
+    func executeRoutine1(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
 
         let script = """
@@ -1156,9 +1174,9 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             document.dispatchEvent(e);
             await sleep(10);
 
-            if (typeof goNext === 'function') goNext(); await sleep(30);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(30);
-            if (typeof goStep01 === 'function') goStep01(); await sleep(50);
+            if (typeof goNext === 'function') goNext(); await sleep(20);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(20);
+            if (typeof goStep01 === 'function') goStep01(); await sleep(30);
 
             var answers = \(answersJSON);
             var total = answers.length;
@@ -1176,27 +1194,20 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 } else {
                     if (typeof goStep0101_finish === 'function') goStep0101_finish();
                 }
-                await sleep(30);
+                await sleep(20);
             }
 
-            if (typeof goStep === 'function') goStep('info02'); await sleep(30);
-            if (typeof goStep === 'function') goStep('step0201'); await sleep(30);
+            if (typeof goStep === 'function') goStep('info02'); await sleep(20);
+            if (typeof goStep === 'function') goStep('step0201'); await sleep(20);
 
             for (var k = 0; k < total - 1; k++) {
                 if (typeof goStep0201_step === 'function') goStep0201_step('next');
                 await sleep(10);
             }
 
-            if (typeof goStep === 'function') goStep('info03'); await sleep(30);
-            if (typeof goStep0301 === 'function') goStep0301(); await sleep(30);
-            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(30);
-
-            location.reload();
-            await sleep(200); 
-            if (typeof goNext === 'function') goNext(); await sleep(30);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(30);
-            
-            alert('지금부터 학습시작 버튼 옆의 시계모양 시간 채우기 버튼을 눌러서 시간을 채울수 있습니다.');
+            if (typeof goStep === 'function') goStep('info03'); await sleep(20);
+            if (typeof goStep0301 === 'function') goStep0301(); await sleep(20);
+            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(20);
 
             return true;
         })();
@@ -1207,5 +1218,39 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 completion()
             }
         }
+    }
+
+    // 학습시작 2: 새로고침 후 goNext(), goNextInfo() 실행
+    func executeRoutine2(completion: @escaping () -> Void) {
+        let script = """
+        (async function() {
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            
+            location.reload();
+            await sleep(1500); 
+
+            if (typeof goNext === 'function') goNext(); await sleep(50);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(50);
+
+            return true;
+        })();
+        """
+        
+        webView.evaluateJavaScript(script) { _, _ in
+            DispatchQueue.main.async {
+                completion()
+            }
+        }
+    }
+
+    // 시간 뻐기기 완료 후 실행할 자바스크립트
+    func executeStep04() {
+        let script = """
+        (async function() {
+            if (typeof goStep04 === 'function') goStep04('Y');
+            return true;
+        })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 }
