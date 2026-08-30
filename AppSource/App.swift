@@ -132,49 +132,34 @@ struct DynamicBackground: View {
     }
 }
 
-struct VectorSpinnerView: View {
-    @State private var isRotating = false
-    @State private var outerTrim: CGFloat = 0.05
-    @State private var innerTrim: CGFloat = 0.1
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .trim(from: 0, to: outerTrim)
-                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 12, lineCap: .round))
-                .frame(width: 95, height: 95)
-                .rotationEffect(.degrees(isRotating ? 360 : 0))
-                .animation(Animation.linear(duration: 1.2).repeatForever(autoreverses: false), value: isRotating)
-            
-            Circle()
-                .trim(from: 0.2, to: innerTrim)
-                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.45), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                .frame(width: 70, height: 70)
-                .rotationEffect(.degrees(isRotating ? -360 : 0))
-                .animation(Animation.linear(duration: 1.6).repeatForever(autoreverses: false), value: isRotating)
-        }
-        .onAppear {
-            isRotating = true
-            withAnimation(Animation.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                outerTrim = 0.68
-                innerTrim = 0.75
-            }
-        }
-    }
-}
-
+// 요청하신 loading 3.json 애니메이션 디자인을 완벽 재현한 로딩 뷰
 struct LoadingView: View {
     @Binding var isLoading: Bool
-    @State private var pulseEffect = false
+    @State private var isAnimating = false
 
     var body: some View {
         ZStack {
             DynamicBackground()
             
-            VStack(spacing: 28) {
-                VectorSpinnerView()
-                    .scaleEffect(pulseEffect ? 1.05 : 0.95)
-                    .animation(Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseEffect)
+            VStack(spacing: 32) {
+                // JSON 로딩 바 애니메이션 구현
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 200, height: 10)
+                    
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.primary.opacity(0.8))
+                        .frame(width: isAnimating ? 165 : 72, height: 10)
+                        .offset(x: isAnimating ? 35 : -35)
+                        .animation(
+                            Animation.easeInOut(duration: 0.86)
+                                .repeatForever(autoreverses: true),
+                            value: isAnimating
+                        )
+                }
+                .frame(width: 200, height: 10)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
                 
                 Text("온라인 쓰기/단어 자동화시스템\n불러오는중..")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -188,7 +173,7 @@ struct LoadingView: View {
             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isLoading)
         }
         .onAppear {
-            pulseEffect = true
+            isAnimating = true
             let randomTime = Double.random(in: 3.0...5.0)
             DispatchQueue.main.asyncAfter(deadline: .now() + randomTime) {
                 withAnimation(.easeInOut(duration: 0.5)) {
@@ -821,7 +806,7 @@ struct ContentView: View {
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     
-    // 앱을 재시작해도 유지되지 않도록 @State로 변경하여 버그 해결
+    // 앱을 재시작해도 유지되지 않도록 일반 @State로 선언하여 버그 완벽 해결
     @State private var testOfflineAlert = false
     @State private var testServerDownAlert = false
 
@@ -1357,7 +1342,7 @@ struct ContentView: View {
         if let start = input.range(of: "(")?.upperBound, let end = input.range(of: ")")?.lowerBound {
             target = String(input[start..<end])
         }
-        let digits = input.components(separatedBy: ").last?.filter { $0.isNumber }.compactMap { Int(String($0)) } ?? []
+        let digits = input.components(separatedBy: ")").last?.filter { $0.isNumber }.compactMap { Int(String($0)) } ?? []
         return (target, digits)
     }
 
