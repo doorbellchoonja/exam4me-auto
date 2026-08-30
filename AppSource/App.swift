@@ -6,6 +6,7 @@ import Network
 struct Exam4meApp: App {
     @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("useSystemTheme") private var useSystemTheme = true
     @AppStorage("customAccentColor") private var customAccentColorName = "blue"
     @State private var isLoading = true
     @StateObject private var networkMonitor = NetworkMonitor()
@@ -23,7 +24,8 @@ struct Exam4meApp: App {
                     ContentView()
                 }
             }
-            .preferredColorScheme(isDarkMode ? .dark : .light)
+            // 시스템 테마 연동 설정 반영
+            .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
             .accentColor(customAccentColor)
         }
     }
@@ -151,9 +153,9 @@ struct SlowNetworkOverlayView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color.blue)
+                            .background(Color.accentColor)
                             .cornerRadius(12)
-                            .shadow(color: Color.blue.opacity(0.3), radius: 5, x: 0, y: 3)
+                            .shadow(color: Color.accentColor.opacity(0.3), radius: 5, x: 0, y: 3)
                     }
                 }
             }
@@ -232,30 +234,36 @@ extension View {
 
 struct DynamicBackground: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("useSystemTheme") private var useSystemTheme = true
     @AppStorage("customThemeStyle") private var themeStyle = "blue"
+    @Environment(\.colorScheme) var colorScheme
     @State private var animateGlow = false
+    
+    var effectiveDarkMode: Bool {
+        useSystemTheme ? (colorScheme == .dark) : isDarkMode
+    }
     
     var body: some View {
         ZStack {
-            Color(isDarkMode ? UIColor.systemBackground : UIColor.secondarySystemBackground)
+            Color(effectiveDarkMode ? UIColor.systemBackground : UIColor.secondarySystemBackground)
                 .edgesIgnoringSafeArea(.all)
             
             Circle()
-                .fill(primaryGlowColor.opacity(isDarkMode ? 0.35 : 0.45))
+                .fill(primaryGlowColor.opacity(effectiveDarkMode ? 0.35 : 0.45))
                 .blur(radius: 90)
                 .frame(width: 320, height: 320)
                 .offset(x: animateGlow ? -130 : 110, y: animateGlow ? -220 : -180)
                 .animation(Animation.easeInOut(duration: 6).repeatForever(autoreverses: true), value: animateGlow)
             
             Circle()
-                .fill(secondaryGlowColor.opacity(isDarkMode ? 0.35 : 0.45))
+                .fill(secondaryGlowColor.opacity(effectiveDarkMode ? 0.35 : 0.45))
                 .blur(radius: 90)
                 .frame(width: 320, height: 320)
                 .offset(x: animateGlow ? 140 : -120, y: animateGlow ? 220 : 170)
                 .animation(Animation.easeInOut(duration: 7).repeatForever(autoreverses: true), value: animateGlow)
                 
             Circle()
-                .fill(accentGlowColor.opacity(isDarkMode ? 0.25 : 0.35))
+                .fill(accentGlowColor.opacity(effectiveDarkMode ? 0.25 : 0.35))
                 .blur(radius: 90)
                 .frame(width: 280, height: 280)
                 .offset(x: animateGlow ? -60 : 70, y: animateGlow ? 380 : 420)
@@ -742,7 +750,6 @@ class ServerStatusManager: ObservableObject {
     }
 }
 
-// 학습 통계 기록 관리 매니저
 class StudyStatsManager: ObservableObject {
     @AppStorage("todayListeningCount") var todayListeningCount: Int = 0
     @AppStorage("todayWritingCount") var todayWritingCount: Int = 0
@@ -933,6 +940,12 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
 
     func loadInitialURL() {
         if let url = URL(string: "https://ssdasa.exam4me.com") {
+            self.webView.load(URLRequest(url: url))
+        }
+    }
+
+    func loadSpecificURL(_ urlString: String) {
+        if let url = URL(string: urlString) {
             self.webView.load(URLRequest(url: url))
         }
     }
@@ -1181,7 +1194,7 @@ struct ContentView: View {
                         .padding(.top, 6)
                     }
 
-                    VStack(spacing: 16) {
+                    VStack(spacing: 14) {
                         HStack(spacing: 6) {
                             Button(action: {
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
@@ -1255,6 +1268,24 @@ struct ContentView: View {
                                         .padding(8)
                                         .background(.ultraThinMaterial)
                                         .clipShape(Circle())
+                                }
+                            }
+                        }
+
+                        // 웹뷰 멀티탭 / 즐겨찾는 페이지 바로가기 퀵 메뉴바 추가
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                QuickMenuButton(title: "홈", icon: "house.fill") {
+                                    vm.loadSpecificURL("https://ssdasa.exam4me.com")
+                                }
+                                QuickMenuButton(title: "학생 홈", icon: "person.fill") {
+                                    vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/studentHome2.jsp")
+                                }
+                                QuickMenuButton(title: "미수행 목록", icon: "list.bullet.clipboard.fill") {
+                                    vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/studentHome2.jsp")
+                                }
+                                QuickMenuButton(title: "마이페이지", icon: "gearshape.2.fill") {
+                                    vm.loadSpecificURL("https://ssdasa.exam4me.com/_student/myPage.jsp")
                                 }
                             }
                         }
@@ -1669,7 +1700,7 @@ struct ContentView: View {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
                     statsManager.addListening()
-                    statsManager.addStudyTime(seconds: 30) // 학습 수행 시간 가산
+                    statsManager.addStudyTime(seconds: 30)
                     withAnimation { isAutomating = true }
                     vm.executeRoutine1(target: target, answers: answers) {
                         withAnimation { isAutomating = false }
@@ -1753,7 +1784,7 @@ struct ContentView: View {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { t in
             if remainingSeconds > 0 {
                 remainingSeconds -= 1
-                statsManager.addStudyTime(seconds: 1) // 뻐기기 시간도 학습 통계 시간에 누적
+                statsManager.addStudyTime(seconds: 1)
             } else {
                 t.invalidate()
                 withAnimation { 
@@ -1789,6 +1820,33 @@ struct ContentView: View {
     }
 }
 
+// 퀵 메뉴 버튼 컴포넌트
+struct QuickMenuButton: View {
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundColor(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.primary.opacity(0.06))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            )
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var serverManager: ServerStatusManager
@@ -1798,6 +1856,7 @@ struct SettingsView: View {
     @Binding var testSlowNetworkAlert: Bool
     
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("useSystemTheme") private var useSystemTheme = true
     @AppStorage("isDeveloperMode") private var isDeveloperMode = false
     @AppStorage("enableFloatingJSButton") private var enableFloatingJSButton = false
     @AppStorage("enableSpeedViewer") private var enableSpeedViewer = false
@@ -1805,14 +1864,17 @@ struct SettingsView: View {
 
     @State private var showCopyToast = false
     @State private var showBugReportAlert = false
-    @State private var showUpdateAlert = false
     @State private var showSecretMeaningAlert = false
+    @State private var latestVersion: String = ""
+    @State private var updateDownloadURL: String = ""
+    @State private var hasNewUpdate: Bool = false
+    @State private var isCheckingUpdate: Bool = false
     
     @State private var creatorTapCount = 0
     @State private var showDevModeChangeAlert = false
     @State private var devModeAlertMessage = ""
 
-    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     let creatorHash = "MFG9PlaS0OqGqprd52Hj2aRCvViotKNeNR8Rot64EhQ="
 
     var body: some View {
@@ -1892,7 +1954,7 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        // 커스텀 테마 및 배경 색상 커스텀 섹션
+                        // 커스텀 테마 설정 섹션
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 Image(systemName: "paintbrush.fill")
@@ -1933,16 +1995,31 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
 
-                        VStack {
-                            Toggle(isOn: $isDarkMode) {
+                        // 다크/라이트 모드 및 시스템 설정 연동 옵션
+                        VStack(alignment: .leading, spacing: 16) {
+                            Toggle(isOn: $useSystemTheme) {
                                 HStack {
-                                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
-                                        .foregroundColor(isDarkMode ? .yellow : .orange)
-                                    Text(isDarkMode ? "다크 모드" : "라이트 모드")
+                                    Image(systemName: "iphone")
+                                        .foregroundColor(.blue)
+                                    Text("시스템 설정 테마 연동")
                                         .font(.system(size: 16, weight: .bold))
                                 }
                             }
                             .tint(.accentColor)
+                            
+                            if !useSystemTheme {
+                                Divider().background(Color.primary.opacity(0.1))
+                                
+                                Toggle(isOn: $isDarkMode) {
+                                    HStack {
+                                        Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                                            .foregroundColor(isDarkMode ? .yellow : .orange)
+                                        Text(isDarkMode ? "다크 모드" : "라이트 모드")
+                                            .font(.system(size: 16, weight: .bold))
+                                    }
+                                }
+                                .tint(.accentColor)
+                            }
                         }
                         .padding(20)
                         .liquidGlass()
@@ -2072,6 +2149,74 @@ struct SettingsView: View {
                             .liquidGlass()
                         }
                         
+                        // 자동 업데이트 알림 및 원클릭 인앱 다운로드 섹션
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                    .foregroundColor(.blue)
+                                Text("자동 업데이트 관리")
+                                    .font(.system(size: 16, weight: .bold))
+                                Spacer()
+                            }
+                            
+                            HStack {
+                                Text("현재 버전")
+                                    .font(.system(size: 15, weight: .medium))
+                                Spacer()
+                                Text("v\(currentAppVersion)")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            if hasNewUpdate {
+                                HStack {
+                                    Text("최신 버전 발견!")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.green)
+                                    Spacer()
+                                    Text("v\(latestVersion)")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.green)
+                                }
+                                
+                                Button(action: {
+                                    if let url = URL(string: updateDownloadURL) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    Text("원클릭 최신 버전 다운로드")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(Color.green)
+                                        .cornerRadius(12)
+                                        .shadow(color: Color.green.opacity(0.3), radius: 5, x: 0, y: 3)
+                                }
+                            } else {
+                                Button(action: {
+                                    checkForUpdates()
+                                }) {
+                                    HStack {
+                                        Text(isCheckingUpdate ? "업데이트 확인 중..." : "업데이트 체크")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        if isCheckingUpdate {
+                                            ProgressView()
+                                        } else {
+                                            Image(systemName: "arrow.triangle.2.circlepath")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                                .disabled(isCheckingUpdate)
+                            }
+                        }
+                        .padding(20)
+                        .liquidGlass()
+                        
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
                                 Image(systemName: "info.circle.fill")
@@ -2080,31 +2225,6 @@ struct SettingsView: View {
                                     .font(.system(size: 16, weight: .bold))
                                 Spacer()
                             }
-                            
-                            HStack {
-                                Text("앱 버전")
-                                    .font(.system(size: 15, weight: .medium))
-                                Spacer()
-                                Text(appVersion)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Divider().background(Color.primary.opacity(0.1))
-                            
-                            Button(action: { showUpdateAlert = true }) {
-                                HStack {
-                                    Text("업데이트 체크")
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            Divider().background(Color.primary.opacity(0.1))
                             
                             Button(action: { shareApp() }) {
                                 HStack {
@@ -2202,7 +2322,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
         .alert("개발자 모드", isPresented: $showDevModeChangeAlert) {
             Button("확인") {
                 exit(0)
@@ -2220,15 +2340,35 @@ struct SettingsView: View {
         } message: {
             Text("제작자한테 디엠하세요.")
         }
-        .alert("업데이트 체크", isPresented: $showUpdateAlert) {
-            Button("확인") {
-                if let url = URL(string: "https://doorbellchoonja.github.io/exam4me-auto") {
-                    UIApplication.shared.open(url)
-                }
-            }
-        } message: {
-            Text("이 알림을 닫으면 앱 설치 화면이 나옵니다. 사이트에 적혀져있는 앱 버전이 깔려있는 앱 버전보다 높으면 설치했던거처럼 업데이트 하면됨 아 그리고 한번 설치해뒀으니까 신뢰 그거 안눌러도 되고 앱 지우면 다시 설치과정 해야하니까 귀찮으면 지우지마셈 아 그리고 자동업데이트는 귀찮아서 안만든거 맞음 ㅇㅇ")
+    }
+    
+    // GitHub Releases API를 통해 최신 버전 체크 수행
+    private func checkForUpdates() {
+        isCheckingUpdate = true
+        guard let url = URL(string: "https://api.github.com/repos/doorbellchoonja/exam4me-auto/releases/latest") else {
+            isCheckingUpdate = false
+            return
         }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                isCheckingUpdate = false
+                guard let data = data, error == nil else { return }
+                do {
+                    if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                       let tagName = json["tag_name"] as? String,
+                       let htmlUrl = json["html_url"] as? String {
+                        let cleanTag = tagName.replacingOccurrences(of: "v", with: "")
+                        latestVersion = cleanTag
+                        updateDownloadURL = htmlUrl
+                        
+                        if cleanTag != currentAppVersion {
+                            hasNewUpdate = true
+                        }
+                    }
+                } catch {}
+            }
+        }.resume()
     }
     
     private func shareApp() {
