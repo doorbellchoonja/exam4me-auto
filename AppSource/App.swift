@@ -76,6 +76,50 @@ struct OfflineView: View {
     }
 }
 
+// 서버 접속 불가 커스텀 알림 뷰 (인터넷 해제 알림과 완벽히 동일한 디자인 적용 및 바깥 터치 시 닫힘)
+struct ServerDownOverlayView: View {
+    @Binding var isPresented: Bool
+    @State private var isAnimating = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .background(.ultraThinMaterial)
+                .edgesIgnoringSafeArea(.all)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation {
+                        isPresented = false
+                    }
+                }
+            
+            VStack(spacing: 24) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.red)
+                    .scaleEffect(isAnimating ? 1.1 : 0.9)
+                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isAnimating)
+                    .onAppear { isAnimating = true }
+                
+                VStack(spacing: 8) {
+                    Text("온라인 서버 접속 불가")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Text("온라인서버가 접속불가인 상태이기때문에\n앱도 온라인서버가 연결잘될때 복구됩니다.")
+                        .font(.system(size: 14, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
+                }
+            }
+            .padding(40)
+            .liquidGlass()
+            .padding(30)
+        }
+    }
+}
+
 struct LiquidGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -163,6 +207,7 @@ struct VectorSpinnerView: View {
     }
 }
 
+// 앱 전체 로딩 및 웹뷰 로딩에서 공통으로 쓰이는 동일한 로딩 애니메이션 뷰
 struct LoadingView: View {
     @Binding var isLoading: Bool
     @State private var isAnimating = false
@@ -558,6 +603,7 @@ struct StatusBadge: View {
     }
 }
 
+// 웹뷰 로딩 시에도 앱 전체 로딩과 동일한 LoadingView를 표시하도록 수정
 struct WebViewContainer: UIViewRepresentable {
     @ObservedObject var vm: WebViewModel
     func makeUIView(context: Context) -> WKWebView { vm.webView }
@@ -1026,11 +1072,9 @@ struct ContentView: View {
                             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.1), lineWidth: 1))
                         
                         if vm.isLoadingWeb {
-                            ZStack {
-                                Color(UIColor.systemBackground).opacity(0.85)
-                                VectorSpinnerView()
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            // 웹뷰 로딩 시에도 동일한 로딩 애니메이션 뷰 표시
+                            LoadingView(isLoading: .constant(true))
+                                .clipShape(RoundedRectangle(cornerRadius: 20))
                         }
                     }
                     .padding(.horizontal, 16)
@@ -1236,6 +1280,17 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
             }
+
+            // 서버 접속 불가 시 인터넷 해제 알림과 동일한 디자인의 커스텀 오버레이 뷰 표시
+            if serverManager.showServerDownAlert || testServerDownAlert {
+                ServerDownOverlayView(isPresented: Binding(
+                    get: { serverManager.showServerDownAlert || testServerDownAlert },
+                    set: { newValue in
+                        serverManager.showServerDownAlert = newValue
+                        testServerDownAlert = newValue
+                    }
+                ))
+            }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView(serverManager: serverManager, testOfflineAlert: $testOfflineAlert, testServerDownAlert: $testServerDownAlert)
@@ -1330,25 +1385,6 @@ struct ContentView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text("시간을 그만 뻐기겠습니까?")
-        }
-        .alert("온라인 서버 접속 불가", isPresented: Binding(
-            get: { serverManager.showServerDownAlert || testServerDownAlert },
-            set: { newValue in
-                serverManager.showServerDownAlert = newValue
-                testServerDownAlert = newValue
-            }
-        )) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text("온라인서버가 접속불가인 상태이기때문에 앱도 온라인서버가 연결잘될때 복구됩니다.")
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if testServerDownAlert {
-                withAnimation {
-                    testServerDownAlert = false
-                }
-            }
         }
         .onAppear {
             if !testServerDownAlert {
