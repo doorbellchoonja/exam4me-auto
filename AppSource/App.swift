@@ -125,33 +125,32 @@ struct DynamicBackground: View {
     }
 }
 
-// loading 2_3.json의 속성을 그대로 담은 네이티브 벡터 렌더링 스피너
 struct VectorSpinnerView: View {
     @State private var isRotating = false
-    @State private var trimEnd: CGFloat = 0.15
+    @State private var outerTrim: CGFloat = 0.05
+    @State private var innerTrim: CGFloat = 0.1
 
     var body: some View {
         ZStack {
-            // Camada de forma 1 & 2 (Outer Rings)
             Circle()
-                .trim(from: 0, to: trimEnd)
-                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 11, lineCap: .round))
+                .trim(from: 0, to: outerTrim)
+                .stroke(Color(red: 0.016, green: 0.416, blue: 0.816), style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 .frame(width: 95, height: 95)
                 .rotationEffect(.degrees(isRotating ? 360 : 0))
-                .animation(Animation.linear(duration: 1.4).repeatForever(autoreverses: false), value: isRotating)
+                .animation(Animation.linear(duration: 1.2).repeatForever(autoreverses: false), value: isRotating)
             
-            // Camada de forma 3 & 4 (Inner Rings)
             Circle()
-                .trim(from: 0.1, to: 0.65)
+                .trim(from: 0.2, to: innerTrim)
                 .stroke(Color(red: 0.016, green: 0.416, blue: 0.816).opacity(0.45), style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .frame(width: 70, height: 70)
                 .rotationEffect(.degrees(isRotating ? -360 : 0))
-                .animation(Animation.linear(duration: 1.8).repeatForever(autoreverses: false), value: isRotating)
+                .animation(Animation.linear(duration: 1.6).repeatForever(autoreverses: false), value: isRotating)
         }
         .onAppear {
             isRotating = true
-            withAnimation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                trimEnd = 0.70
+            withAnimation(Animation.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                outerTrim = 0.68
+                innerTrim = 0.75
             }
         }
     }
@@ -366,6 +365,9 @@ struct ContentView: View {
     @State private var showIdkAnswerAlert: Bool = false
     @State private var timer: Timer? = nil
     
+    // 자동화 진행 상태 관리 변수 추가
+    @State private var isAutomating: Bool = false
+    
     @State private var showYouTube: Bool = false
     @State private var isYouTubeMinimized: Bool = false
 
@@ -539,6 +541,36 @@ struct ContentView: View {
                 .padding(.bottom, 8)
             }
 
+            // 자동화 진행 중일 때 뜨는 뻐기기 스타일 오버레이 화면
+            if isAutomating {
+                Color.black.opacity(0.6)
+                    .background(.ultraThinMaterial)
+                    .edgesIgnoringSafeArea(.all)
+                    .transition(.opacity)
+
+                VStack(spacing: 24) {
+                    VectorSpinnerView()
+
+                    VStack(spacing: 8) {
+                        Text("자동화를 진행하고 있습니다!")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+
+                        Text("잠시만 기다려주세요.\n작업이 완료되면 자동으로 종료됩니다.")
+                            .font(.system(size: 14, weight: .medium))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.white.opacity(0.8))
+                            .lineSpacing(4)
+                    }
+                }
+                .padding(40)
+                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(24)
+                .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .padding(30)
+            }
+
             if isDelaying {
                 Color.black.opacity(showYouTube && !isYouTubeMinimized ? 0.9 : 0.6)
                     .background(.ultraThinMaterial)
@@ -660,7 +692,10 @@ struct ContentView: View {
             Button("🎧 듣기평가 (Listening)") {
                 let (target, answers) = parseAnswer(answerInput)
                 if !answers.isEmpty {
-                    vm.executeRoutine(target: target, answers: answers) {}
+                    withAnimation { isAutomating = true }
+                    vm.executeRoutine(target: target, answers: answers) {
+                        withAnimation { isAutomating = false }
+                    }
                 }
             }
             Button("취소", role: .cancel) {}
@@ -941,7 +976,7 @@ struct SettingsView: View {
                 }
             }
         } message: {
-            Text("이 알림을 닫으면 앱 설치 화면이 나옵니다. 사이트에 적혀져있는 앱 버전이 깔려있는 앱 버전보다 높으면 설치했던거처럼 업데이트 하면됨 아 그리고 한번 설치해뒀으니까 신뢰 그거 안눌러도 되고 앱 지우면 다시 설치과정 해야하니까 귀찮으면 지우지마셈 아 그리고 자동업데이트는 귀찮아서 안만든거 맞음 ㅇㅇ")
+            Text("이 알림을 닫으면 앱 설치 화면이 나옵니다. 사이트에 적혀져있는 앱 버전이 깔려있는 앱 버전보다 높으면 설치했던거처럼 업데이트 하면됨 아 그리고 한번 설치해뒀으니까 신뢰 그거 안눌러도 되고 앱 지우면 다시 설치과정 해야하니까 귀찮으면 지우지마셈 아 그리고 자동화 업데이터는 귀찮아서 안만든거 맞음 ㅇㅇ")
         }
     }
     
@@ -1102,7 +1137,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "확인", style: .default, handler: { _ in completionHandler(true) }))
-        alert.addAction(UIAlertAction(title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
+        alert.addAction(UIAlertAction, title: "취소", style: .cancel, handler: { _ in completionHandler(false) }))
         
         var topController = root
         while let presented = topController.presentedViewController {
@@ -1111,7 +1146,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         topController.present(alert, animated: true)
     }
 
-    // 더욱 빨라진 초고속 자동화 루프 스크립트
+    // 한계까지 끌어올린 초고속 자동화 루프 스크립트 (딜레이 최소화)
     func executeRoutine(target: String, answers: [Int], completion: @escaping () -> Void) {
         let answersJSON = answers.description
 
@@ -1121,11 +1156,11 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
             
             var e = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true });
             document.dispatchEvent(e);
-            await sleep(50);
+            await sleep(20);
 
-            if (typeof goNext === 'function') goNext(); await sleep(100);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(100);
-            if (typeof goStep01 === 'function') goStep01(); await sleep(200);
+            if (typeof goNext === 'function') goNext(); await sleep(50);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(50);
+            if (typeof goStep01 === 'function') goStep01(); await sleep(80);
 
             var answers = \(answersJSON);
             var total = answers.length;
@@ -1136,32 +1171,32 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
                 if (typeof goStep01_sel === 'function') {
                     goStep01_sel(i, 2, ans);
                 }
-                await sleep(50);
+                await sleep(20);
 
                 if (i < total - 1) {
                     if (typeof goStep0101_answer === 'function') goStep0101_answer();
                 } else {
                     if (typeof goStep0101_finish === 'function') goStep0101_finish();
                 }
-                await sleep(100);
-            }
-
-            if (typeof goStep === 'function') goStep('info02'); await sleep(100);
-            if (typeof goStep === 'function') goStep('step0201'); await sleep(100);
-
-            for (var k = 0; k < total - 1; k++) {
-                if (typeof goStep0201_step === 'function') goStep0201_step('next');
                 await sleep(50);
             }
 
-            if (typeof goStep === 'function') goStep('info03'); await sleep(100);
-            if (typeof goStep0301 === 'function') goStep0301(); await sleep(100);
-            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(100);
+            if (typeof goStep === 'function') goStep('info02'); await sleep(50);
+            if (typeof goStep === 'function') goStep('step0201'); await sleep(50);
+
+            for (var k = 0; k < total - 1; k++) {
+                if (typeof goStep0201_step === 'function') goStep0201_step('next');
+                await sleep(20);
+            }
+
+            if (typeof goStep === 'function') goStep('info03'); await sleep(50);
+            if (typeof goStep0301 === 'function') goStep0301(); await sleep(50);
+            if (typeof goStep04 === 'function') goStep04('Y'); await sleep(50);
 
             location.reload();
-            await sleep(500); 
-            if (typeof goNext === 'function') goNext(); await sleep(100);
-            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(100);
+            await sleep(300); 
+            if (typeof goNext === 'function') goNext(); await sleep(50);
+            if (typeof goNextInfo === 'function') goNextInfo(); await sleep(50);
             
             alert('지금부터 학습시작 버튼 옆의 시계모양 시간 채우기 버튼을 눌러서 시간을 채울수 있습니다.');
 
