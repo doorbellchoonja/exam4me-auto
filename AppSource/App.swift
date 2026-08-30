@@ -486,7 +486,6 @@ struct ContentView: View {
                             }
                             .disabled(!vm.canGoBack)
 
-                            // 팝업닫기 버튼 (글씨 제거 후 아이콘만 남김)
                             Button(action: {
                                 vm.closePopup()
                             }) {
@@ -852,7 +851,8 @@ struct ContentView: View {
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
                 
-                showTopMostAlert(message: "이제 저장해도 좋습니다.") {
+                // 안내 문구 수정: 저장 후 설정버튼 가장 오른쪽 빨간색 닫기 버튼 안내 덧대기
+                showTopMostAlert(message: "이제 저장해도 좋습니다. 저장하고 나서 설정버튼에서 가장 오른쪽에 있는 빨간색 닫기 버튼을 누르면 미수행학습목록으로 이동합니다.") {
                     vm.executeStep04()
                 }
             }
@@ -1190,7 +1190,7 @@ class WebViewModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelega
         }
     }
 
-    // 팝업닫기 버튼 누를 때 지정된 주소로 바로 이동하도록 수정
+    // 팝업닫기 버튼 누를 때 요구하신 미수행학습목록 페이지 주소로 이동하도록 수정
     func closePopup() {
         if let url = URL(string: "https://ssdasa.exam4me.com/_student/studentHome2.jsp") {
             self.webView.load(URLRequest(url: url))
