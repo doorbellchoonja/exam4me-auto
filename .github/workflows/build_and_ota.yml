@@ -81,7 +81,7 @@ jobs:
 
           strip -r -u ExamAuto
 
-      - name: Package Signed IPA
+      - name: Package Unsigned and Signed IPA
         run: |
           mkdir -p Payload/ExamAuto.app
           cp ExamAuto Payload/ExamAuto.app/ExamAuto
@@ -114,6 +114,11 @@ jobs:
           fi
 
           mkdir -p output
+          
+          # Unsigned IPA 패키징
+          zip -qr "output/ExamAuto-unsigned.ipa" Payload
+
+          # Signed IPA 패키징
           cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
           security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
           /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision.plist > $RUNNER_TEMP/entitlements.plist
@@ -121,6 +126,17 @@ jobs:
           CERT_ID=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
           codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements.plist --timestamp=none Payload/ExamAuto.app
           zip -qr "output/ExamAuto-signed.ipa" Payload
+
+      - name: Publish IPAs to GitHub Releases
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: "ExamAuto v${{ env.APP_VERSION }}"
+          files: |
+            output/ExamAuto-signed.ipa
+            output/ExamAuto-unsigned.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup OTA Manifest & Pages Web
         env:
@@ -131,8 +147,8 @@ jobs:
           cp output/ExamAuto-signed.ipa public/ExamAuto.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
-
-          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" $RUNNER_TEMP/provision.plist | sed 's/^[^.]*\.//')
+          provision_plist="$RUNNER_TEMP/provision.plist"
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$provision_plist" 2>/dev/null | sed 's/^[^.]*\.//')
           if [ -z "$BUNDLE_ID" ]; then
             BUNDLE_ID="com.worksin.one"
           fi
@@ -195,7 +211,6 @@ jobs:
           </plist>
           EOF
 
-          # 깃허브 페이지스 메인 화면에는 OTA 다이렉트 설치 버튼만 남김
           cat << EOF > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
