@@ -656,6 +656,7 @@ class ServerStatusManager: ObservableObject {
         }.resume()
     }
     
+    // 0.1초마다 실시간으로 인터넷 속도 측정 및 반영 (기준: 100 KB/s 미만 시 세션당 1회 팝업)
     func startRealtimeSpeedTracking() {
         speedTimer?.invalidate()
         speedTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -677,7 +678,7 @@ class ServerStatusManager: ObservableObject {
                             self.currentSpeedText = String(format: "%.1f KB/s", speedKBPerSec)
                         }
                         
-                        // 실시간 속도가 100 KB/s 미만으로 떨어지면 느림 안내 팝업 노출 (세션당 1회)
+                        // 단 한 번이라도 100 KB/s 미만으로 떨어지면 느림 안내 팝업 노출 (세션당 1회 제한)
                         if speedKBPerSec < 100.0 && !self.hasAlertedSlowNetwork {
                             self.hasAlertedSlowNetwork = true
                             self.isSlowNetwork = true
@@ -1538,12 +1539,6 @@ struct ContentView: View {
                     }
                 }
             }
-            if isDeveloperMode && enableSpeedViewer {
-                // Already started tracking via startRealtimeSpeedTracking
-            }
-        }
-        .onChange(of: enableSpeedViewer) { newValue in
-            // Speed tracking is handled continuously by ServerStatusManager
         }
     }
 
