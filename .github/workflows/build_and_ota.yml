@@ -208,7 +208,7 @@ jobs:
           </plist>
           EOF
 
-          # 기존 앱의 디자인과 고유 기능(퀵 메뉴, 실시간 속도, 다크모드, OTA 다이렉트 설치 등)이 그대로 탑재된 웹 버전 index.html
+          # 기존 앱의 글래스모피즘 디자인, 퀵 메뉴, 다크 슬립 모드, 통계 바 및 모든 기능 코드가 그대로 탑재된 웹 버전 index.html
           cat << 'EOF' > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
