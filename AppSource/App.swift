@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import Network
 import LocalAuthentication
+import UniformTypeIdentifiers
 
 @main
 struct Exam4meApp: App {
@@ -902,6 +903,78 @@ class StudyStatsManager: ObservableObject {
     }
 }
 
+// 단어장 및 쓰기 자동화 데이터 구조 관리 (능률보카어원.txt 구조 반영)[span_4](start_span)[span_4](end_span)
+struct VocabItem: Codable, Identifiable, Hashable {
+    var id = UUID()
+    let number: String
+    let category: String
+    let word: String
+    let meaning: String
+}
+
+struct VocabBook: Codable, Identifiable, Hashable {
+    var id = UUID()
+    let title: String
+    let items: [VocabItem]
+}
+
+class VocabManager: ObservableObject {
+    @AppStorage("savedVocabBooksData") var savedVocabBooksData: String = "[]"
+
+    var books: [VocabBook] {
+        get {
+            guard let data = savedVocabBooksData.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([VocabBook].self, from: data) else {
+                return [VocabBook(title: "기본 능률보카 어원", items: [
+                    VocabItem(number: "1", category: "1", word: "progress", meaning: "전진(하다); 진보(하다)"),
+                    VocabItem(number: "2", category: "2", word: "propose", meaning: "제안하다; 제시하다"),
+                    VocabItem(number: "31", category: "31", word: "overseas", meaning: "해외로, 해외에 있는"),
+                    VocabItem(number: "60", category: "60", word: "depress", meaning: "낙담시키다; 불경기로 만들다")
+                ])]
+            }
+            return decoded
+        }
+        set {
+            if let encoded = try? JSONEncoder().encode(newValue),
+               let jsonString = String(data: encoded, encoding: .utf8) {
+                savedVocabBooksData = jsonString
+                objectWillChange.send()
+            }
+        }
+    }
+
+    func addBook(title: String, content: String) {
+        let lines = content.components(separatedBy: .newlines)
+        var items: [VocabItem] = []
+        
+        for (index, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            let comps = line.components(separatedBy: "\t")
+            if comps.count >= 4 {
+                let num = comps[0].trimmingCharacters(in: .whitespaces)
+                let cat = comps[1].trimmingCharacters(in: .whitespaces)
+                let word = comps[2].trimmingCharacters(in: .whitespaces)
+                let meaning = comps[3].trimmingCharacters(in: .whitespaces)
+                if index == 0 && (num.contains("번호") || word.contains("단어")) { continue }
+                items.append(VocabItem(number: num, category: cat, word: word, meaning: meaning))
+            }
+        }
+        
+        if !items.isEmpty {
+            var current = books
+            current.append(VocabBook(title: title, items: items))
+            books = current
+        }
+    }
+
+    func removeBook(id: UUID) {
+        var current = books
+        current.removeAll { $0.id == id }
+        books = current
+    }
+}
+
 class JSMacroManager: ObservableObject {
     @AppStorage("savedJSMacros") var savedMacrosData: String = "[]"
 
@@ -1284,6 +1357,7 @@ struct ContentView: View {
     
     @State private var showTaskTypeDialog: Bool = false
     @State private var showListeningActionDialog: Bool = false
+    @State private var showWritingSetupSheet: Bool = false // 쓰기 자동화 설정 시트
     
     @State private var showSettings: Bool = false
     @State private var showGuide: Bool = false
@@ -1813,11 +1887,18 @@ struct ContentView: View {
         .sheet(isPresented: $showJSSheet) {
             JSExecutionView(vm: vm, customJSInput: $customJSInput, showJSSheet: $showJSSheet, macroManager: macroManager)
         }
+        // 쓰기 자동화 설정 시트 연결
+        .sheet(isPresented: $showWritingSetupSheet) {
+            WritingSetupView(vm: vm, statsManager: statsManager, isPresented: $showWritingSetupSheet)
+        }
         .confirmationDialog("진행할 학습 유형을 선택하세요", isPresented: $showTaskTypeDialog, titleVisibility: .visible) {
             Button("🎧 듣기 (Listening)") {
                 showListeningActionDialog = true
             }
-            Button("📝 쓰기 (Vocabulary - 준비중)", role: .cancel) {}
+            Button("📝 쓰기 (Vocabulary)") {
+                showWritingSetupSheet = true
+            }
+            Button("취소", role: .cancel) {}
         }
         .confirmationDialog("듣기 평가 자동화 모드를 선택하세요", isPresented: $showListeningActionDialog, titleVisibility: .visible) {
             Button("학습시작 1") {
@@ -1882,7 +1963,6 @@ struct ContentView: View {
             }
             checkStartupUpdate()
         }
-        // 자동화 중(`isAutomating == true`)일 때는 네트워크 변경 감지 및 자동 새로고침을 아예 작동하지 않도록 차단
         .onChange(of: networkMonitor.connectionType) { _ in
             if !isAutomating && networkMonitor.isConnected {
                 vm.webView.reload()
@@ -1977,6 +2057,157 @@ struct ContentView: View {
             }
             topController.present(alert, animated: true)
         }
+    }
+}
+
+// 쓰기 자동화 범위 및 단어장 선택 설정 뷰
+struct WritingSetupView: View {
+    @ObservedObject var vm: WebViewModel
+    @ObservedObject var statsManager: StudyStatsManager
+    @Binding var isPresented: Bool
+    
+    @StateObject private var vocabManager = VocabManager()
+    @State private var selectedBookID: UUID? = nil
+    @State private var rangeInput: String = "31-60"
+    @State private var showFileImporter = false
+
+    var body: some View {
+        ZStack {
+            DynamicBackground()
+            VStack(spacing: 20) {
+                HStack {
+                    Text("쓰기 자동화 & 복습 범위 설정")
+                        .font(.system(size: 20, weight: .bold))
+                    Spacer()
+                    Button("닫기") { isPresented = false }
+                }
+                .padding(.top, 10)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("단어장 선택 및 추가")
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    HStack {
+                        Picker("단어장", selection: $selectedBookID) {
+                            ForEach(vocabManager.books) { book in
+                                Text(book.title).tag(Optional(book.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        Spacer()
+                        
+                        Button(action: { showFileImporter = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                Text(".txt 추가")
+                            }
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.purple)
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+                .padding(16)
+                .liquidGlass()
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("복습하기 범위 입력")
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    TextField("예: 31-60", text: $rangeInput)
+                        .padding(12)
+                        .background(Color.primary.opacity(0.05))
+                        .cornerRadius(10)
+                        .font(.system(size: 15))
+                    
+                    Text("범위는 31-60 이런 형식으로 입력해주세요[span_5](start_span)[span_5](end_span).")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .liquidGlass()
+                
+                Button(action: {
+                    executeWritingAutomation()
+                }) {
+                    Text("쓰기 자동화 시작")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.accentColor)
+                        .cornerRadius(14)
+                        .shadow(color: Color.accentColor.opacity(0.3), radius: 6, x: 0, y: 3)
+                }
+                
+                Spacer()
+            }
+            .padding(20)
+        }
+        .onAppear {
+            if selectedBookID == nil, let first = vocabManager.books.first {
+                selectedBookID = first.id
+            }
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.plainText, .text],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                if url.startAccessingSecurityScopedResource() {
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    do {
+                        let content = try String(contentsOf: url, encoding: .utf8)
+                        let title = url.deletingPathExtension().lastPathComponent
+                        vocabManager.addBook(title: title, content: content)
+                        if let added = vocabManager.books.last {
+                            selectedBookID = added.id
+                        }
+                    } catch {
+                        print("File read error: \(error)")
+                    }
+                }
+            case .failure(let error):
+                print("Import error: \(error)")
+            }
+        }
+    }
+
+    private func executeWritingAutomation() {
+        guard let bookID = selectedBookID,
+              let book = vocabManager.books.first(where: { $0.id == bookID }) else {
+            return
+        }
+        
+        let comps = rangeInput.components(separatedBy: "-")
+        guard comps.count == 2,
+              let startNum = Int(comps[0].trimmingCharacters(in: .whitespaces)),
+              let endNum = Int(comps[1].trimmingCharacters(in: .whitespaces)) else {
+            return
+        }
+        
+        let filteredItems = book.items.filter { item in
+            if let num = Int(item.number) {
+                return num >= startNum && num <= endNum
+            }
+            return false
+        }
+        
+        statsManager.addWriting()
+        statsManager.addStudyTime(seconds: 30)
+        isPresented = false
+        
+        // 초기 저장 카드 부분 대응 및 javascript:goNext(); 실행[span_6](start_span)[span_6](end_span)
+        vm.webView.evaluateJavaScript("goNext();", completionHandler: { _, _ in
+            print("Writing automation initialized with range \(startNum)-\(endNum), total words: \(filteredItems.count)")
+        })
     }
 }
 
@@ -2197,9 +2428,6 @@ struct SettingsView: View {
     @State private var creatorTapCount = 0
     @State private var showDevModeChangeAlert = false
     @State private var devModeAlertMessage = ""
-
-    // 업데이트 예정이력 6번 연속 터치 이스터에그를 위한 카운트 상태값
-    @State private var updateHistoryTapCount = 0
 
     let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     let creatorHash = "MFG9PlaS0OqGqprd52Hj2aRCvViotKNeNR8Rot64EhQ="
@@ -2595,23 +2823,12 @@ struct SettingsView: View {
                         .padding(20)
                         .liquidGlass()
                         
-                        // 업데이트 예정이력 (6번 누르면 이스터에그 영상 링크 오픈)
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "sparkles")
                                     .foregroundColor(.purple)
                                 Text("업데이트 예정이력")
                                     .font(.system(size: 16, weight: .bold))
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        updateHistoryTapCount += 1
-                                        if updateHistoryTapCount >= 6 {
-                                            updateHistoryTapCount = 0
-                                            if let videoURL = URL(string: "https://cdn.mtdv.me/video/rick.mp4") {
-                                                UIApplication.shared.open(videoURL)
-                                            }
-                                        }
-                                    }
                                 Spacer()
                             }
                             Text("곧 쓰기자동화도 넣을예정입니다.")
