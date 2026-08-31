@@ -27,53 +27,46 @@ jobs:
           echo "APP_VERSION=${FULL_VERSION}" >> $GITHUB_ENV
           echo "BUILD_NUM=${BUILD_NUMBER}" >> $GITHUB_ENV
 
-      - name: Extract Certificate and Key (Option 1 & Option 2 Support)
+      - name: Extract Certificates and Keys (Option 1, 2 & 3 Support)
         run: |
-          mkdir -p $RUNNER_TEMP/certs_out_1 $RUNNER_TEMP/certs_out_2
+          mkdir -p $RUNNER_TEMP/certs_out_1 $RUNNER_TEMP/certs_out_2 $RUNNER_TEMP/certs_out_3
           
-          # 설치옵션 1: 기존 인증서 (저장소 내 기본 p12 & mobileprovision)
-          P12_1=$(find . -maxdepth 3 -name "*.p12" | head -n 1)
-          PROV_1=$(find . -maxdepth 3 -name "*.mobileprovision" | head -n 1)
-
-          if [ -n "$P12_1" ] && [ -n "$PROV_1" ]; then
-            mkdir -p certs_1
-            cp "$P12_1" certs_1/cert.p12
-            cp "$PROV_1" certs_1/profile.mobileprovision
-
+          # 설치옵션 1: certs_1 폴더
+          if [ -f "certs_1/cert.p12" ] && [ -f "certs_1/profile.mobileprovision" ]; then
             openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_1/cert.pem -legacy 2>/dev/null || \
             openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_1/cert.pem
-
             openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_1/key.pem -legacy 2>/dev/null || \
             openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_1/key.pem
           fi
 
-          # 설치옵션 2: 새로 올린 인증서 (사용자 제공 파일 세트)
-          # 만약 추가 세트가 별도 폴더에 없다면 옵션 1과 동일 폴더 구조 혹은 업로드된 명칭 분기 처리
-          mkdir -p certs_2
-          if [ -f "cert.p12" ] && [ -f "cert.mobileprovision" ]; then
-            cp cert.p12 certs_2/cert.p12
-            cp cert.mobileprovision certs_2/profile.mobileprovision
-          elif [ -n "$P12_1" ]; then
-            cp "$P12_1" certs_2/cert.p12
-            cp "$PROV_1" certs_2/profile.mobileprovision
+          # 설치옵션 2: certs_2 폴더
+          if [ -f "certs_2/cert.p12" ] && [ -f "certs_2/profile.mobileprovision" ]; then
+            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem -legacy 2>/dev/null || \
+            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem
+            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem -legacy 2>/dev/null || \
+            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem
           fi
 
-          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem
+          # 설치옵션 3: 새로 추가된 HSBC 인증서 (certs_3 폴더, 비밀번호: 1)[cite: 2]
+          if [ -f "certs_3/cert.p12" ] && [ -f "certs_3/profile.mobileprovision" ]; then
+            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_3/cert.pem -legacy 2>/dev/null || \
+            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_3/cert.pem
+            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_3/key.pem -legacy 2>/dev/null || \
+            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_3/key.pem
+          fi
 
-          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem
-
-          # 기본 키체인 설정 (설치옵션 2 인증서 기준 메인 서명 수행)
+          # 키체인 초기화 및 기본 서명용 (옵션 3 인증서 기준 우선 등록)
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
           security create-keychain -p "actions" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
 
-          cat $RUNNER_TEMP/certs_out_2/cert.pem $RUNNER_TEMP/certs_out_2/key.pem > $RUNNER_TEMP/certs_out_2/combined.pem
-          openssl pkcs12 -export -in $RUNNER_TEMP/certs_out_2/combined.pem -out $RUNNER_TEMP/certs_out_2/rebuilt.p12 -passout pass:actions
-          
-          security import $RUNNER_TEMP/certs_out_2/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          if [ -f "$RUNNER_TEMP/certs_out_3/cert.pem" ]; then
+            cat $RUNNER_TEMP/certs_out_3/cert.pem $RUNNER_TEMP/certs_out_3/key.pem > $RUNNER_TEMP/certs_out_3/combined.pem
+            openssl pkcs12 -export -in $RUNNER_TEMP/certs_out_3/combined.pem -out $RUNNER_TEMP/certs_out_3/rebuilt.p12 -passout pass:actions
+            security import $RUNNER_TEMP/certs_out_3/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          fi
+
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
@@ -98,7 +91,7 @@ jobs:
 
           strip -r -u ExamAuto
 
-      - name: Package Unsigned and Signed IPAs (Option 1 & Option 2)
+      - name: Package Unsigned and Signed IPAs (Options 1, 2 & 3)
         run: |
           mkdir -p Payload/ExamAuto.app
           cp ExamAuto Payload/ExamAuto.app/ExamAuto
@@ -132,10 +125,10 @@ jobs:
 
           mkdir -p output
 
-          # 1. 미서명 IPA 패키징
+          # 미서명 IPA
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
 
-          # 2. 설치옵션 1 서명 (기존 인증서 세트 사용)
+          # 설치옵션 1 서명
           if [ -f "certs_1/profile.mobileprovision" ]; then
             cp certs_1/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
             security cms -D -i certs_1/profile.mobileprovision > $RUNNER_TEMP/provision_1.plist
@@ -147,13 +140,29 @@ jobs:
             cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt1.ipa
           fi
 
-          # 3. 설치옵션 2 서명 (새로 올린 인증서 세트 사용)
-          cp certs_2/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
-          security cms -D -i certs_2/profile.mobileprovision > $RUNNER_TEMP/provision_2.plist
-          /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_2.plist > $RUNNER_TEMP/entitlements_2.plist
-          CERT_ID_2=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
-          codesign --force --deep --sign "$CERT_ID_2" --entitlements $RUNNER_TEMP/entitlements_2.plist --timestamp=none Payload/ExamAuto.app
-          zip -qr "output/ExamAuto-signed-opt2.ipa" Payload
+          # 설치옵션 2 서명
+          if [ -f "certs_2/profile.mobileprovision" ]; then
+            cp certs_2/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
+            security cms -D -i certs_2/profile.mobileprovision > $RUNNER_TEMP/provision_2.plist
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_2.plist > $RUNNER_TEMP/entitlements_2.plist
+            CERT_ID_2=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
+            codesign --force --deep --sign "$CERT_ID_2" --entitlements $RUNNER_TEMP/entitlements_2.plist --timestamp=none Payload/ExamAuto.app
+            zip -qr "output/ExamAuto-signed-opt2.ipa" Payload
+          else
+            cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt2.ipa
+          fi
+
+          # 설치옵션 3 서명 (신규 HSBC 인증서)[cite: 2]
+          if [ -f "certs_3/profile.mobileprovision" ]; then
+            cp certs_3/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
+            security cms -D -i certs_3/profile.mobileprovision > $RUNNER_TEMP/provision_3.plist
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_3.plist > $RUNNER_TEMP/entitlements_3.plist
+            CERT_ID_3=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
+            codesign --force --deep --sign "$CERT_ID_3" --entitlements $RUNNER_TEMP/entitlements_3.plist --timestamp=none Payload/ExamAuto.app
+            zip -qr "output/ExamAuto-signed-opt3.ipa" Payload
+          else
+            cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt3.ipa
+          fi
 
       - name: Publish IPAs to GitHub Releases
         uses: softprops/action-gh-release@v1
@@ -163,6 +172,7 @@ jobs:
           files: |
             output/ExamAuto-signed-opt1.ipa
             output/ExamAuto-signed-opt2.ipa
+            output/ExamAuto-signed-opt3.ipa
             output/ExamAuto-unsigned.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -175,11 +185,15 @@ jobs:
           mkdir -p public
           cp output/ExamAuto-signed-opt1.ipa public/ExamAuto-opt1.ipa
           cp output/ExamAuto-signed-opt2.ipa public/ExamAuto-opt2.ipa
+          cp output/ExamAuto-signed-opt3.ipa public/ExamAuto-opt3.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
           
-          # Bundle ID 추출 (옵션 2 기준)
-          provision_plist="$RUNNER_TEMP/provision_2.plist"
+          provision_plist="$RUNNER_TEMP/provision_3.plist"
+          if [ ! -f "$provision_plist" ]; then
+            provision_plist="$RUNNER_TEMP/provision_2.plist"
+          fi
+          
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$provision_plist" 2>/dev/null | sed 's/^[^.]*\.//')
           if [ -z "$BUNDLE_ID" ]; then
             BUNDLE_ID="com.worksin.one"
@@ -193,8 +207,9 @@ jobs:
             cp public/icon57.png public/icon512.png
           fi
 
-          # 옵션 1 매니페스트 생성
-          cat << EOF > public/manifest-opt1.plist
+          # 옵션 1, 2, 3 각각의 매니페스트(plist) 생성
+          for opt in 1 2 3; do
+            cat << EOF > public/manifest-opt${opt}.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -208,7 +223,7 @@ jobs:
                               <key>kind</key>
                               <string>software-package</string>
                               <key>url</key>
-                              <string>${BASE_URL}/ExamAuto-opt1.ipa</string>
+                              <string>${BASE_URL}/ExamAuto-opt${opt}.ipa</string>
                           </dict>
                           <dict>
                               <key>kind</key>
@@ -232,62 +247,16 @@ jobs:
                           <key>kind</key>
                           <string>software</string>
                           <key>title</key>
-                          <string>ExamAuto (설치옵션 1)</string>
+                          <string>ExamAuto (설치옵션 ${opt})</string>
                       </dict>
                   </dict>
               </array>
           </dict>
           </plist>
           EOF
+          done
 
-          # 옵션 2 매니페스트 생성
-          cat << EOF > public/manifest-opt2.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>items</key>
-              <array>
-                  <dict>
-                      <key>assets</key>
-                      <array>
-                          <dict>
-                              <key>kind</key>
-                              <string>software-package</string>
-                              <key>url</key>
-                              <string>${BASE_URL}/ExamAuto-opt2.ipa</string>
-                          </dict>
-                          <dict>
-                              <key>kind</key>
-                              <string>display-image</string>
-                              <key>url</key>
-                              <string>${BASE_URL}/icon57.png</string>
-                          </dict>
-                          <dict>
-                              <key>kind</key>
-                              <string>full-size-image</string>
-                              <key>url</key>
-                              <string>${BASE_URL}/icon512.png</string>
-                          </dict>
-                      </array>
-                      <key>metadata</key>
-                      <dict>
-                          <key>bundle-identifier</key>
-                          <string>${BUNDLE_ID}</string>
-                          <key>bundle-version</key>
-                          <string>${APP_VERSION}</string>
-                          <key>kind</key>
-                          <string>software</string>
-                          <key>title</key>
-                          <string>ExamAuto (설치옵션 2)</string>
-                      </dict>
-                  </dict>
-              </array>
-          </dict>
-          </plist>
-          EOF
-
-          # 설치 옵션 1과 옵션 2를 선택할 수 있는 포털 페이지 생성
+          # 옵션 1, 2, 3 선택 가능한 설치 포털 페이지 생성
           cat << 'EOF' > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
@@ -335,11 +304,12 @@ jobs:
                       box-sizing: border-box;
                   }
                   .btn-opt1 { background-color: #007aff; color: white; }
-                  .btn-opt2 { background-color: #34c759; color: white; }
+                  .btn-opt2 { background-color: #5856d6; color: white; }
+                  .btn-opt3 { background-color: #34c759; color: white; }
               </style>
               <script>
                   function installOpt(opt) {
-                      const manifestName = opt === 1 ? 'manifest-opt1.plist' : 'manifest-opt2.plist';
+                      const manifestName = 'manifest-opt' + opt + '.plist';
                       const url = 'itms-services://?action=download-manifest&url=' + encodeURIComponent('https://' + window.location.host + window.location.pathname.replace(/\/[^/]*$/, '') + '/' + manifestName);
                       window.location.href = url;
                   }
@@ -350,7 +320,8 @@ jobs:
                   <h1>ExamAuto OTA 설치</h1>
                   <p>원하시는 인증서 설치 옵션을 선택해 주세요.</p>
                   <a class="btn btn-opt1" href="#" onclick="installOpt(1)">설치 옵션 1 (기존 인증서)</a>
-                  <a class="btn btn-opt2" href="#" onclick="installOpt(2)">설치 옵션 2 (신규 업로드 인증서)</a>
+                  <a class="btn btn-opt2" href="#" onclick="installOpt(2)">설치 옵션 2 (신규 인증서)</a>
+                  <a class="btn btn-opt3" href="#" onclick="installOpt(3)">설치 옵션 3 (신규 HSBC 인증서)</a>
               </div>
           </body>
           </html>
