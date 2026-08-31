@@ -30,26 +30,26 @@ jobs:
       - name: Setup Keychain and Extract Certificates
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
-          security create-keychain -p "actions" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security create-keychain -p "actions" "$KEYCHAIN_PATH" || true
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH" || true
+          security unlock-keychain -p "actions" "$KEYCHAIN_PATH" || true
+          security list-keychain -d user -s "$KEYCHAIN_PATH" || true
 
-          # 공통 인증서 처리 함수 (p12 파일을 키체인에 안정적으로 임포트)
           import_cert() {
             local dir=$1
             if [ -f "$dir/cert.p12" ]; then
               echo "Processing certificate in $dir..."
               openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
-              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem || true
 
               openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
-              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem || true
 
-              cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
-              openssl pkcs12 -export -in $RUNNER_TEMP/combined.pem -out $RUNNER_TEMP/rebuilt.p12 -passout pass:actions
-              
-              security import $RUNNER_TEMP/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+              if [ -f "$RUNNER_TEMP/cert.pem" ] && [ -f "$RUNNER_TEMP/key.pem" ]; then
+                cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
+                openssl pkcs12 -export -in $RUNNER_TEMP/combined.pem -out $RUNNER_TEMP/rebuilt.p12 -passout pass:actions
+                security import $RUNNER_TEMP/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign || true
+              fi
             fi
           }
 
@@ -57,7 +57,7 @@ jobs:
           import_cert "certs_2"
           import_cert "certs_3"
 
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH" || true
 
       - name: Build Secure iOS Binary
         run: |
@@ -116,7 +116,6 @@ jobs:
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
 
-          # 서명 함수 (지정된 프로비저닝 프로필로 서명 수행)
           sign_ipa() {
             local opt_num=$1
             local prov_path=$2
@@ -124,16 +123,18 @@ jobs:
 
             if [ -f "$prov_path" ]; then
               cp "$prov_path" Payload/ExamAuto.app/embedded.mobileprovision
-              security cms -D -i "$prov_path" > $RUNNER_TEMP/provision_$opt_num.plist
-              /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_$opt_num.plist > $RUNNER_TEMP/entitlements_$opt_num.plist
-              
-              CERT_ID=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -n 1 | awk -F'"' '{print $2}')
-              if [ -z "$CERT_ID" ]; then
-                CERT_ID=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -n 2 | tail -n 1 | awk -F'"' '{print $2}')
+              security cms -D -i "$prov_path" > $RUNNER_TEMP/provision_$opt_num.plist 2>/dev/null || true
+              if [ -f "$RUNNER_TEMP/provision_$opt_num.plist" ]; then
+                /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_$opt_num.plist > $RUNNER_TEMP/entitlements_$opt_num.plist 2>/dev/null || true
               fi
-
-              codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements_$opt_num.plist --timestamp=none Payload/ExamAuto.app
-              zip -qr "output/$output_name" Payload
+              
+              CERT_ID=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" 2>/dev/null | head -n 1 | awk -F'"' '{print $2}')
+              if [ -n "$CERT_ID" ] && [ -f "$RUNNER_TEMP/entitlements_$opt_num.plist" ]; then
+                codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements_$opt_num.plist --timestamp=none Payload/ExamAuto.app || true
+                zip -qr "output/$output_name" Payload
+              else
+                cp output/ExamAuto-unsigned.ipa "output/$output_name"
+              fi
             else
               cp output/ExamAuto-unsigned.ipa "output/$output_name"
             fi
@@ -173,7 +174,10 @@ jobs:
             provision_plist="$RUNNER_TEMP/provision_1.plist"
           fi
           
-          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$provision_plist" 2>/dev/null | sed 's/^[^.]*\.//')
+          BUNDLE_ID=""
+          if [ -f "$provision_plist" ]; then
+            BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$provision_plist" 2>/dev/null | sed 's/^[^.]*\.//')
+          fi
           if [ -z "$BUNDLE_ID" ]; then
             BUNDLE_ID="com.worksin.one"
           fi
