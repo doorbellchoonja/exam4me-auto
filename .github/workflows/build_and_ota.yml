@@ -27,48 +27,37 @@ jobs:
           echo "APP_VERSION=${FULL_VERSION}" >> $GITHUB_ENV
           echo "BUILD_NUM=${BUILD_NUMBER}" >> $GITHUB_ENV
 
-      - name: Extract Certificates and Keys (Option 1, 2 & 3 Support)
+      - name: Setup Keychain and Extract Certificates
         run: |
-          mkdir -p $RUNNER_TEMP/certs_out_1 $RUNNER_TEMP/certs_out_2 $RUNNER_TEMP/certs_out_3
-          
-          # 설치옵션 1: certs_1 폴더
-          if [ -f "certs_1/cert.p12" ] && [ -f "certs_1/profile.mobileprovision" ]; then
-            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_1/cert.pem -legacy 2>/dev/null || \
-            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_1/cert.pem
-            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_1/key.pem -legacy 2>/dev/null || \
-            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_1/key.pem
-          fi
-
-          # 설치옵션 2: certs_2 폴더
-          if [ -f "certs_2/cert.p12" ] && [ -f "certs_2/profile.mobileprovision" ]; then
-            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem -legacy 2>/dev/null || \
-            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem
-            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem -legacy 2>/dev/null || \
-            openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem
-          fi
-
-          # 설치옵션 3: 새로 추가된 HSBC 인증서 (certs_3 폴더, 비밀번호: 1)[cite: 2]
-          if [ -f "certs_3/cert.p12" ] && [ -f "certs_3/profile.mobileprovision" ]; then
-            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_3/cert.pem -legacy 2>/dev/null || \
-            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_3/cert.pem
-            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_3/key.pem -legacy 2>/dev/null || \
-            openssl pkcs12 -in certs_3/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_3/key.pem
-          fi
-
-          # 키체인 초기화 및 기본 서명용 (옵션 3 인증서 기준 우선 등록)
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
           security create-keychain -p "actions" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-          if [ -f "$RUNNER_TEMP/certs_out_3/cert.pem" ]; then
-            cat $RUNNER_TEMP/certs_out_3/cert.pem $RUNNER_TEMP/certs_out_3/key.pem > $RUNNER_TEMP/certs_out_3/combined.pem
-            openssl pkcs12 -export -in $RUNNER_TEMP/certs_out_3/combined.pem -out $RUNNER_TEMP/certs_out_3/rebuilt.p12 -passout pass:actions
-            security import $RUNNER_TEMP/certs_out_3/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
-          fi
+          # 공통 인증서 처리 함수 (p12 파일을 키체인에 안정적으로 임포트)
+          import_cert() {
+            local dir=$1
+            if [ -f "$dir/cert.p12" ]; then
+              echo "Processing certificate in $dir..."
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem
+
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/key.pem
+
+              cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
+              openssl pkcs12 -export -in $RUNNER_TEMP/combined.pem -out $RUNNER_TEMP/rebuilt.p12 -passout pass:actions
+              
+              security import $RUNNER_TEMP/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+            fi
+          }
+
+          import_cert "certs_1"
+          import_cert "certs_2"
+          import_cert "certs_3"
 
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
 
       - name: Build Secure iOS Binary
         run: |
@@ -124,45 +113,35 @@ jobs:
           fi
 
           mkdir -p output
-
-          # 미서명 IPA
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
 
-          # 설치옵션 1 서명
-          if [ -f "certs_1/profile.mobileprovision" ]; then
-            cp certs_1/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
-            security cms -D -i certs_1/profile.mobileprovision > $RUNNER_TEMP/provision_1.plist
-            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_1.plist > $RUNNER_TEMP/entitlements_1.plist
-            CERT_ID_1=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
-            codesign --force --deep --sign "$CERT_ID_1" --entitlements $RUNNER_TEMP/entitlements_1.plist --timestamp=none Payload/ExamAuto.app
-            zip -qr "output/ExamAuto-signed-opt1.ipa" Payload
-          else
-            cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt1.ipa
-          fi
+          # 서명 함수 (지정된 프로비저닝 프로필로 서명 수행)
+          sign_ipa() {
+            local opt_num=$1
+            local prov_path=$2
+            local output_name=$3
 
-          # 설치옵션 2 서명
-          if [ -f "certs_2/profile.mobileprovision" ]; then
-            cp certs_2/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
-            security cms -D -i certs_2/profile.mobileprovision > $RUNNER_TEMP/provision_2.plist
-            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_2.plist > $RUNNER_TEMP/entitlements_2.plist
-            CERT_ID_2=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
-            codesign --force --deep --sign "$CERT_ID_2" --entitlements $RUNNER_TEMP/entitlements_2.plist --timestamp=none Payload/ExamAuto.app
-            zip -qr "output/ExamAuto-signed-opt2.ipa" Payload
-          else
-            cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt2.ipa
-          fi
+            if [ -f "$prov_path" ]; then
+              cp "$prov_path" Payload/ExamAuto.app/embedded.mobileprovision
+              security cms -D -i "$prov_path" > $RUNNER_TEMP/provision_$opt_num.plist
+              /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_$opt_num.plist > $RUNNER_TEMP/entitlements_$opt_num.plist
+              
+              CERT_ID=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -n 1 | awk -F'"' '{print $2}')
+              if [ -z "$CERT_ID" ]; then
+                CERT_ID=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -n 2 | tail -n 1 | awk -F'"' '{print $2}')
+              fi
 
-          # 설치옵션 3 서명 (신규 HSBC 인증서)[cite: 2]
-          if [ -f "certs_3/profile.mobileprovision" ]; then
-            cp certs_3/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
-            security cms -D -i certs_3/profile.mobileprovision > $RUNNER_TEMP/provision_3.plist
-            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_3.plist > $RUNNER_TEMP/entitlements_3.plist
-            CERT_ID_3=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
-            codesign --force --deep --sign "$CERT_ID_3" --entitlements $RUNNER_TEMP/entitlements_3.plist --timestamp=none Payload/ExamAuto.app
-            zip -qr "output/ExamAuto-signed-opt3.ipa" Payload
-          else
-            cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt3.ipa
-          fi
+              codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements_$opt_num.plist --timestamp=none Payload/ExamAuto.app
+              zip -qr "output/$output_name" Payload
+            else
+              cp output/ExamAuto-unsigned.ipa "output/$output_name"
+            fi
+          }
+
+          sign_ipa "1" "certs_1/profile.mobileprovision" "ExamAuto-signed-opt1.ipa"
+          sign_ipa "2" "certs_2/profile.mobileprovision" "ExamAuto-signed-opt2.ipa"
+          sign_ipa "3" "certs_3/profile.mobileprovision" "ExamAuto-signed-opt3.ipa"
 
       - name: Publish IPAs to GitHub Releases
         uses: softprops/action-gh-release@v1
@@ -191,7 +170,7 @@ jobs:
           
           provision_plist="$RUNNER_TEMP/provision_3.plist"
           if [ ! -f "$provision_plist" ]; then
-            provision_plist="$RUNNER_TEMP/provision_2.plist"
+            provision_plist="$RUNNER_TEMP/provision_1.plist"
           fi
           
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$provision_plist" 2>/dev/null | sed 's/^[^.]*\.//')
@@ -207,7 +186,6 @@ jobs:
             cp public/icon57.png public/icon512.png
           fi
 
-          # 옵션 1, 2, 3 각각의 매니페스트(plist) 생성
           for opt in 1 2 3; do
             cat << EOF > public/manifest-opt${opt}.plist
           <?xml version="1.0" encoding="UTF-8"?>
@@ -256,7 +234,6 @@ jobs:
           EOF
           done
 
-          # 옵션 1, 2, 3 선택 가능한 설치 포털 페이지 생성
           cat << 'EOF' > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
