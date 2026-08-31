@@ -59,11 +59,11 @@ jobs:
             local dir="certs_3"
             if [ -f "$dir/cert.p12" ]; then
               echo "Processing certificate in $dir (HSBC)..."
-              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
-              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem || true
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"@ashtemobile" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"@ashtemobile" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem || true
 
-              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
-              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -nocerts -nodes -out $RUNNER_TEMP/key.pem || true
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"@ashtemobile" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"@ashtemobile" -nocerts -nodes -out $RUNNER_TEMP/key.pem || true
 
               if [ -f "$RUNNER_TEMP/cert.pem" ] && [ -f "$RUNNER_TEMP/key.pem" ]; then
                 cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
