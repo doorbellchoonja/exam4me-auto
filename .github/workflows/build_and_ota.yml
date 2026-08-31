@@ -27,36 +27,53 @@ jobs:
           echo "APP_VERSION=${FULL_VERSION}" >> $GITHUB_ENV
           echo "BUILD_NUM=${BUILD_NUMBER}" >> $GITHUB_ENV
 
-      - name: Extract Certificate and Key
+      - name: Extract Certificate and Key (Option 1 & Option 2 Support)
         run: |
-          mkdir -p $RUNNER_TEMP/certs_out
-          P12_SRC=$(find . -maxdepth 3 -name "*.p12" | head -n 1)
-          PROV_SRC=$(find . -maxdepth 3 -name "*.mobileprovision" | head -n 1)
+          mkdir -p $RUNNER_TEMP/certs_out_1 $RUNNER_TEMP/certs_out_2
+          
+          # 설치옵션 1: 기존 인증서 (저장소 내 기본 p12 & mobileprovision)
+          P12_1=$(find . -maxdepth 3 -name "*.p12" | head -n 1)
+          PROV_1=$(find . -maxdepth 3 -name "*.mobileprovision" | head -n 1)
 
-          if [ -z "$P12_SRC" ] || [ -z "$PROV_SRC" ]; then
-            echo "::error::인증서(.p12) 또는 프로비저닝 프로필(.mobileprovision) 파일을 찾을 수 없습니다."
-            exit 1
+          if [ -n "$P12_1" ] && [ -n "$PROV_1" ]; then
+            mkdir -p certs_1
+            cp "$P12_1" certs_1/cert.p12
+            cp "$PROV_1" certs_1/profile.mobileprovision
+
+            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_1/cert.pem -legacy 2>/dev/null || \
+            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_1/cert.pem
+
+            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_1/key.pem -legacy 2>/dev/null || \
+            openssl pkcs12 -in certs_1/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_1/key.pem
           fi
 
-          mkdir -p certs
-          cp "$P12_SRC" certs/cert.p12
-          cp "$PROV_SRC" certs/profile.mobileprovision
+          # 설치옵션 2: 새로 올린 인증서 (사용자 제공 파일 세트)
+          # 만약 추가 세트가 별도 폴더에 없다면 옵션 1과 동일 폴더 구조 혹은 업로드된 명칭 분기 처리
+          mkdir -p certs_2
+          if [ -f "cert.p12" ] && [ -f "cert.mobileprovision" ]; then
+            cp cert.p12 certs_2/cert.p12
+            cp cert.mobileprovision certs_2/profile.mobileprovision
+          elif [ -n "$P12_1" ]; then
+            cp "$P12_1" certs_2/cert.p12
+            cp "$PROV_1" certs_2/profile.mobileprovision
+          fi
 
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out/cert.pem
+          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -clcerts -nokeys -out $RUNNER_TEMP/certs_out_2/cert.pem
 
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem -legacy 2>/dev/null || \
-          openssl pkcs12 -in certs/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out/key.pem
+          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem -legacy 2>/dev/null || \
+          openssl pkcs12 -in certs_2/cert.p12 -passin pass:"1" -nocerts -nodes -out $RUNNER_TEMP/certs_out_2/key.pem
 
+          # 기본 키체인 설정 (설치옵션 2 인증서 기준 메인 서명 수행)
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
           security create-keychain -p "actions" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "actions" "$KEYCHAIN_PATH"
 
-          cat $RUNNER_TEMP/certs_out/cert.pem $RUNNER_TEMP/certs_out/key.pem > $RUNNER_TEMP/certs_out/combined.pem
-          openssl pkcs12 -export -in $RUNNER_TEMP/certs_out/combined.pem -out $RUNNER_TEMP/certs_out/rebuilt.p12 -passout pass:actions
+          cat $RUNNER_TEMP/certs_out_2/cert.pem $RUNNER_TEMP/certs_out_2/key.pem > $RUNNER_TEMP/certs_out_2/combined.pem
+          openssl pkcs12 -export -in $RUNNER_TEMP/certs_out_2/combined.pem -out $RUNNER_TEMP/certs_out_2/rebuilt.p12 -passout pass:actions
           
-          security import $RUNNER_TEMP/certs_out/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security import $RUNNER_TEMP/certs_out_2/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
@@ -81,7 +98,7 @@ jobs:
 
           strip -r -u ExamAuto
 
-      - name: Package Unsigned and Signed IPA
+      - name: Package Unsigned and Signed IPAs (Option 1 & Option 2)
         run: |
           mkdir -p Payload/ExamAuto.app
           cp ExamAuto Payload/ExamAuto.app/ExamAuto
@@ -114,15 +131,29 @@ jobs:
           fi
 
           mkdir -p output
+
+          # 1. 미서명 IPA 패키징
           zip -qr "output/ExamAuto-unsigned.ipa" Payload
 
-          cp certs/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
-          security cms -D -i certs/profile.mobileprovision > $RUNNER_TEMP/provision.plist
-          /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision.plist > $RUNNER_TEMP/entitlements.plist
+          # 2. 설치옵션 1 서명 (기존 인증서 세트 사용)
+          if [ -f "certs_1/profile.mobileprovision" ]; then
+            cp certs_1/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
+            security cms -D -i certs_1/profile.mobileprovision > $RUNNER_TEMP/provision_1.plist
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_1.plist > $RUNNER_TEMP/entitlements_1.plist
+            CERT_ID_1=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
+            codesign --force --deep --sign "$CERT_ID_1" --entitlements $RUNNER_TEMP/entitlements_1.plist --timestamp=none Payload/ExamAuto.app
+            zip -qr "output/ExamAuto-signed-opt1.ipa" Payload
+          else
+            cp output/ExamAuto-unsigned.ipa output/ExamAuto-signed-opt1.ipa
+          fi
 
-          CERT_ID=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
-          codesign --force --deep --sign "$CERT_ID" --entitlements $RUNNER_TEMP/entitlements.plist --timestamp=none Payload/ExamAuto.app
-          zip -qr "output/ExamAuto-signed.ipa" Payload
+          # 3. 설치옵션 2 서명 (새로 올린 인증서 세트 사용)
+          cp certs_2/profile.mobileprovision Payload/ExamAuto.app/embedded.mobileprovision
+          security cms -D -i certs_2/profile.mobileprovision > $RUNNER_TEMP/provision_2.plist
+          /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' $RUNNER_TEMP/provision_2.plist > $RUNNER_TEMP/entitlements_2.plist
+          CERT_ID_2=$(security find-identity -v -p codesigning $RUNNER_TEMP/build.keychain-db | head -n 1 | awk -F'"' '{print $2}')
+          codesign --force --deep --sign "$CERT_ID_2" --entitlements $RUNNER_TEMP/entitlements_2.plist --timestamp=none Payload/ExamAuto.app
+          zip -qr "output/ExamAuto-signed-opt2.ipa" Payload
 
       - name: Publish IPAs to GitHub Releases
         uses: softprops/action-gh-release@v1
@@ -130,21 +161,25 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}
           name: "ExamAuto v${{ env.APP_VERSION }}"
           files: |
-            output/ExamAuto-signed.ipa
+            output/ExamAuto-signed-opt1.ipa
+            output/ExamAuto-signed-opt2.ipa
             output/ExamAuto-unsigned.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup OTA Manifest & Pages Web
+      - name: Setup OTA Manifests & Portal Page
         env:
           GH_OWNER: ${{ github.repository_owner }}
           GH_REPO: ${{ github.event.repository.name }}
         run: |
           mkdir -p public
-          cp output/ExamAuto-signed.ipa public/ExamAuto.ipa
+          cp output/ExamAuto-signed-opt1.ipa public/ExamAuto-opt1.ipa
+          cp output/ExamAuto-signed-opt2.ipa public/ExamAuto-opt2.ipa
 
           BASE_URL="https://${GH_OWNER}.github.io/${GH_REPO}"
-          provision_plist="$RUNNER_TEMP/provision.plist"
+          
+          # Bundle ID 추출 (옵션 2 기준)
+          provision_plist="$RUNNER_TEMP/provision_2.plist"
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$provision_plist" 2>/dev/null | sed 's/^[^.]*\.//')
           if [ -z "$BUNDLE_ID" ]; then
             BUNDLE_ID="com.worksin.one"
@@ -158,7 +193,8 @@ jobs:
             cp public/icon57.png public/icon512.png
           fi
 
-          cat << EOF > public/manifest.plist
+          # 옵션 1 매니페스트 생성
+          cat << EOF > public/manifest-opt1.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -172,21 +208,17 @@ jobs:
                               <key>kind</key>
                               <string>software-package</string>
                               <key>url</key>
-                              <string>${BASE_URL}/ExamAuto.ipa</string>
+                              <string>${BASE_URL}/ExamAuto-opt1.ipa</string>
                           </dict>
                           <dict>
                               <key>kind</key>
                               <string>display-image</string>
-                              <key>needs-shine</key>
-                              <false/>
                               <key>url</key>
                               <string>${BASE_URL}/icon57.png</string>
                           </dict>
                           <dict>
                               <key>kind</key>
                               <string>full-size-image</string>
-                              <key>needs-shine</key>
-                              <false/>
                               <key>url</key>
                               <string>${BASE_URL}/icon512.png</string>
                           </dict>
@@ -200,7 +232,7 @@ jobs:
                           <key>kind</key>
                           <string>software</string>
                           <key>title</key>
-                          <string>ExamAuto</string>
+                          <string>ExamAuto (설치옵션 1)</string>
                       </dict>
                   </dict>
               </array>
@@ -208,324 +240,118 @@ jobs:
           </plist>
           EOF
 
-          # 기존 앱의 글래스모피즘 디자인, 퀵 메뉴, 다크 슬립 모드, 통계 바 및 모든 기능 코드가 그대로 탑재된 웹 버전 index.html
+          # 옵션 2 매니페스트 생성
+          cat << EOF > public/manifest-opt2.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>items</key>
+              <array>
+                  <dict>
+                      <key>assets</key>
+                      <array>
+                          <dict>
+                              <key>kind</key>
+                              <string>software-package</string>
+                              <key>url</key>
+                              <string>${BASE_URL}/ExamAuto-opt2.ipa</string>
+                          </dict>
+                          <dict>
+                              <key>kind</key>
+                              <string>display-image</string>
+                              <key>url</key>
+                              <string>${BASE_URL}/icon57.png</string>
+                          </dict>
+                          <dict>
+                              <key>kind</key>
+                              <string>full-size-image</string>
+                              <key>url</key>
+                              <string>${BASE_URL}/icon512.png</string>
+                          </dict>
+                      </array>
+                      <key>metadata</key>
+                      <dict>
+                          <key>bundle-identifier</key>
+                          <string>${BUNDLE_ID}</string>
+                          <key>bundle-version</key>
+                          <string>${APP_VERSION}</string>
+                          <key>kind</key>
+                          <string>software</string>
+                          <key>title</key>
+                          <string>ExamAuto (설치옵션 2)</string>
+                      </dict>
+                  </dict>
+              </array>
+          </dict>
+          </plist>
+          EOF
+
+          # 설치 옵션 1과 옵션 2를 선택할 수 있는 포털 페이지 생성
           cat << 'EOF' > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
           <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-              <title>ExamAuto Web & OTA</title>
+              <title>ExamAuto OTA 설치 포털</title>
               <style>
-                  :root {
-                      --bg-color: #f2f2f7;
-                      --text-color: #1c1c1e;
-                      --secondary-color: #8e8e93;
-                      --accent-color: #007aff;
-                      --glass-bg: rgba(255, 255, 255, 0.65);
-                      --glass-border: rgba(255, 255, 255, 0.4);
-                  }
-                  body.dark-mode {
-                      --bg-color: #000000;
-                      --text-color: #f2f2f7;
-                      --secondary-color: #aeaeb2;
-                      --glass-bg: rgba(28, 28, 30, 0.65);
-                      --glass-border: rgba(255, 255, 255, 0.15);
-                  }
                   body {
                       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                      background-color: var(--bg-color);
-                      color: var(--text-color);
+                      background-color: #000000;
+                      color: #f2f2f7;
                       margin: 0;
-                      padding: 12px;
+                      padding: 20px;
                       display: flex;
                       flex-direction: column;
+                      align-items: center;
+                      justify-content: center;
                       height: 100vh;
                       box-sizing: border-box;
-                      overflow: hidden;
-                      transition: background 0.3s ease;
                   }
-                  .liquid-glass {
-                      background: var(--glass-bg);
+                  .card {
+                      background: rgba(28, 28, 30, 0.75);
                       backdrop-filter: blur(20px);
                       -webkit-backdrop-filter: blur(20px);
                       border-radius: 20px;
-                      border: 1px solid var(--glass-border);
-                      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
-                      padding: 16px;
-                      margin-bottom: 10px;
-                  }
-                  .speed-viewer {
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      font-size: 12px;
-                      font-weight: 600;
-                      color: var(--secondary-color);
-                      margin-bottom: 6px;
-                  }
-                  .header {
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                  }
-                  .app-brand {
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      cursor: pointer;
-                  }
-                  .brand-dot {
-                      width: 8px;
-                      height: 8px;
-                      background-color: #34c759;
-                      border-radius: 50%;
-                      box-shadow: 0 0 8px #34c759;
-                  }
-                  .brand-text {
-                      font-weight: 800;
-                      font-size: 17px;
-                      color: var(--text-color);
-                  }
-                  .icon-btn-group {
-                      display: flex;
-                      gap: 6px;
-                  }
-                  .circle-btn {
-                      width: 32px;
-                      height: 32px;
-                      border-radius: 50%;
-                      background: var(--glass-bg);
-                      border: 1px solid var(--glass-border);
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      font-size: 14px;
-                      color: var(--text-color);
-                      cursor: pointer;
-                  }
-                  .status-badges {
-                      display: flex;
-                      gap: 10px;
-                      margin-top: 12px;
-                  }
-                  .badge {
-                      flex: 1;
-                      background: rgba(255, 255, 255, 0.05);
-                      border: 1px solid var(--glass-border);
-                      border-radius: 14px;
-                      padding: 10px 14px;
-                      display: flex;
-                      align-items: center;
-                      gap: 10px;
-                  }
-                  .badge-info div:first-child {
-                      font-size: 11px;
-                      font-weight: 600;
-                      color: var(--secondary-color);
-                  }
-                  .badge-info div:last-child {
-                      font-size: 14px;
-                      font-weight: 800;
-                      color: var(--text-color);
-                  }
-                  .quick-menu {
-                      display: flex;
-                      gap: 6px;
-                      overflow-x: auto;
-                      margin-top: 12px;
-                      padding-bottom: 2px;
-                  }
-                  .quick-btn {
-                      background: var(--glass-bg);
-                      border: 1px solid var(--glass-border);
-                      padding: 7px 12px;
-                      border-radius: 10px;
-                      font-size: 11px;
-                      font-weight: 700;
-                      color: var(--text-color);
-                      white-space: nowrap;
-                      cursor: pointer;
-                  }
-                  .input-area {
-                      display: flex;
-                      gap: 8px;
-                      margin-top: 12px;
-                  }
-                  .input-box {
-                      flex: 1;
-                      display: flex;
-                      align-items: center;
-                      gap: 8px;
-                      background: rgba(255, 255, 255, 0.05);
-                      border: 1px solid var(--glass-border);
-                      border-radius: 14px;
-                      padding: 0 12px;
-                  }
-                  input {
+                      border: 1px solid rgba(255, 255, 255, 0.15);
+                      padding: 24px;
                       width: 100%;
-                      border: none;
-                      background: transparent;
-                      color: var(--text-color);
-                      font-size: 14px;
-                      padding: 12px 0;
-                      outline: none;
-                  }
-                  .start-btn {
-                      background: linear-gradient(135deg, #007aff, #5ac8fa);
-                      color: white;
-                      border: none;
-                      padding: 0 20px;
-                      border-radius: 14px;
-                      font-weight: 700;
-                      font-size: 14px;
-                      cursor: pointer;
-                      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-                  }
-                  .timer-btn {
-                      background: linear-gradient(135deg, #ff9500, #ff2d55);
-                      color: white;
-                      border: none;
-                      padding: 0 14px;
-                      border-radius: 14px;
-                      font-size: 16px;
-                      cursor: pointer;
-                      box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
-                  }
-                  .webview-wrapper {
-                      flex: 1;
-                      width: 100%;
-                      border-radius: 20px;
-                      overflow: hidden;
-                      border: 1px solid var(--glass-border);
-                      background: white;
-                      position: relative;
-                  }
-                  iframe {
-                      width: 100%;
-                      height: 100%;
-                      border: none;
-                  }
-                  .floating-js {
-                      position: fixed;
-                      bottom: 24px;
-                      right: 24px;
-                      background: linear-gradient(135deg, #af52de, #007aff);
-                      color: white;
-                      padding: 12px 18px;
-                      border-radius: 25px;
-                      font-weight: 700;
-                      font-size: 13px;
-                      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-                      cursor: pointer;
-                      z-index: 100;
-                  }
-                  .ota-banner {
+                      max-width: 360px;
+                      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
                       text-align: center;
-                      font-size: 11px;
-                      color: var(--secondary-color);
-                      margin-top: 6px;
                   }
-                  .ota-link {
-                      color: var(--accent-color);
+                  h1 { font-size: 20px; margin-bottom: 8px; }
+                  p { font-size: 13px; color: #aeaeb2; margin-bottom: 24px; }
+                  .btn {
+                      display: block;
+                      width: 100%;
+                      padding: 14px 0;
+                      border-radius: 14px;
                       font-weight: bold;
-                      cursor: pointer;
-                      text-decoration: underline;
+                      font-size: 15px;
+                      text-decoration: none;
+                      margin-bottom: 12px;
+                      box-sizing: border-box;
                   }
+                  .btn-opt1 { background-color: #007aff; color: white; }
+                  .btn-opt2 { background-color: #34c759; color: white; }
               </style>
               <script>
-                  window.addEventListener('load', function() {
-                      if (!sessionStorage.getItem('reloaded_once')) {
-                          sessionStorage.setItem('reloaded_once', 'true');
-                          setTimeout(function() { window.location.reload(true); }, 200);
-                      }
-                  });
-
-                  function loadUrl(url) {
-                      document.getElementById('webFrame').src = url;
-                  }
-
-                  function loadHwList() {
-                      const date = new Date();
-                      const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                      loadUrl(`https://ssdasa.exam4me.com/_student/hwDoList2.jsp?yearMonth=${yearMonth}&doYn=N`);
-                  }
-
-                  function triggerOTA() {
-                      alert('기기 전용 설치를 시작합니다. 설치 완료 후 설정에서 인증서를 신뢰해 주세요.');
-                      window.location.href = 'itms-services://?action=download-manifest&url=https://' + window.location.host + window.location.pathname.replace(/\/[^/]*$/, '') + '/manifest.plist';
-                  }
-
-                  function toggleDarkMode() {
-                      document.body.classList.toggle('dark-mode');
+                  function installOpt(opt) {
+                      const manifestName = opt === 1 ? 'manifest-opt1.plist' : 'manifest-opt2.plist';
+                      const url = 'itms-services://?action=download-manifest&url=' + encodeURIComponent('https://' + window.location.host + window.location.pathname.replace(/\/[^/]*$/, '') + '/' + manifestName);
+                      window.location.href = url;
                   }
               </script>
           </head>
-          <body class="dark-mode">
-
-              <div class="liquid-glass">
-                  <div class="speed-viewer">
-                      <span>⚡ 실시간 속도:</span> <span id="speedText" style="color:var(--accent-color);">325.4 KB/s</span>
-                  </div>
-
-                  <div class="header">
-                      <div class="app-brand" onclick="loadUrl('https://ssdasa.exam4me.com')">
-                          <div class="brand-dot"></div>
-                          <span class="brand-text">Exam4me</span>
-                      </div>
-                      <div class="icon-btn-group">
-                          <div class="circle-btn" onclick="alert('장하현한테 문의하세요.')">❓</div>
-                          <div class="circle-btn" onclick="toggleDarkMode()">⚙️</div>
-                          <div class="circle-btn" onclick="document.getElementById('webFrame').contentWindow.location.reload()">🔄</div>
-                          <div class="circle-btn" onclick="loadUrl('https://ssdasa.exam4me.com/_student/studentHome2.jsp')">❌</div>
-                      </div>
-                  </div>
-
-                  <div class="quick-menu">
-                      <button class="quick-btn" onclick="loadUrl('https://ssdasa.exam4me.com')">🏠 홈</button>
-                      <button class="quick-btn" onclick="loadUrl('https://ssdasa.exam4me.com/_student/studentHome2.jsp')">👤 학생 홈</button>
-                      <button class="quick-btn" onclick="loadHwList()">📋 미수행 목록</button>
-                  </div>
-
-                  <div class="status-badges">
-                      <div class="badge">
-                          <span style="font-size:16px; color:#007aff;">🎧</span>
-                          <div class="badge-info">
-                              <div>Listening</div>
-                              <div>0개 미수행</div>
-                          </div>
-                      </div>
-                      <div class="badge">
-                          <span style="font-size:16px; color:#af52de;">📚</span>
-                          <div class="badge-info">
-                              <div>Vocabulary</div>
-                              <div>0개 미수행</div>
-                          </div>
-                      </div>
-                  </div>
-
-                  <div class="input-area">
-                      <div class="input-box">
-                          <span style="color:var(--secondary-color);">🔍</span>
-                          <input type="text" id="answerInput" placeholder="답지 입력...">
-                      </div>
-                      <button class="start-btn" onclick="alert('웹 버전 자동화 매크로 준비 완료')">시작</button>
-                      <button class="timer-btn" onclick="alert('시간 뻐기기 타이머 시작')">⏱️</button>
-                  </div>
-
-                  <div class="ota-banner">
-                      앱으로 설치하려면 <span class="ota-link" onclick="triggerOTA()">[여기서 OTA 다이렉트 설치]</span>를 누르세요.
-                  </div>
+          <body>
+              <div class="card">
+                  <h1>ExamAuto OTA 설치</h1>
+                  <p>원하시는 인증서 설치 옵션을 선택해 주세요.</p>
+                  <a class="btn btn-opt1" href="#" onclick="installOpt(1)">설치 옵션 1 (기존 인증서)</a>
+                  <a class="btn btn-opt2" href="#" onclick="installOpt(2)">설치 옵션 2 (신규 업로드 인증서)</a>
               </div>
-
-              <div class="webview-wrapper">
-                  <iframe id="webFrame" src="https://ssdasa.exam4me.com"></iframe>
-              </div>
-
-              <div class="floating-js" onclick="alert('JS 콘솔 및 개발자 설정, 매크로 저장소')">
-                  &lt;/&gt; JS실행
-              </div>
-
           </body>
           </html>
           EOF
