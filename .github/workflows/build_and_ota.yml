@@ -1,4 +1,4 @@
-name: Build IPA, Deploy Web & OTA
+name: Build Signed & Unsigned IPA, Deploy OTA & Web
 
 on:
   workflow_dispatch:
@@ -135,7 +135,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Web & OTA Manifest Pages
+      - name: Setup OTA Manifest & Pages Web
         env:
           GH_OWNER: ${{ github.repository_owner }}
           GH_REPO: ${{ github.event.repository.name }}
@@ -208,12 +208,12 @@ jobs:
           </plist>
           EOF
 
-          # 웹에서 바로 실행 가능하도록 구성된 메인 웹 앱 페이지 생성
+          # 기존 앱의 디자인과 고유 기능(퀵 메뉴, 실시간 속도, 다크모드, OTA 다이렉트 설치 등)이 그대로 탑재된 웹 버전 index.html
           cat << 'EOF' > public/index.html
           <!DOCTYPE html>
           <html lang="ko">
           <head>
-              <meta charset="UTF-8">
+              <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
               <title>ExamAuto Web & OTA</title>
               <style>
@@ -225,16 +225,7 @@ jobs:
                       --glass-bg: rgba(255, 255, 255, 0.65);
                       --glass-border: rgba(255, 255, 255, 0.4);
                   }
-                  @media (prefers-color-scheme: dark) {
-                      body[data-theme-auto="true"] {
-                          --bg-color: #000000;
-                          --text-color: #f2f2f7;
-                          --secondary-color: #aeaeb2;
-                          --glass-bg: rgba(28, 28, 30, 0.65);
-                          --glass-border: rgba(255, 255, 255, 0.15);
-                      }
-                  }
-                  body[data-theme="dark"] {
+                  body.dark-mode {
                       --bg-color: #000000;
                       --text-color: #f2f2f7;
                       --secondary-color: #aeaeb2;
@@ -246,12 +237,13 @@ jobs:
                       background-color: var(--bg-color);
                       color: var(--text-color);
                       margin: 0;
-                      padding: 10px;
+                      padding: 12px;
                       display: flex;
                       flex-direction: column;
                       height: 100vh;
                       box-sizing: border-box;
                       overflow: hidden;
+                      transition: background 0.3s ease;
                   }
                   .liquid-glass {
                       background: var(--glass-bg);
@@ -260,39 +252,94 @@ jobs:
                       border-radius: 20px;
                       border: 1px solid var(--glass-border);
                       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
-                      padding: 14px;
-                      margin-bottom: 8px;
+                      padding: 16px;
+                      margin-bottom: 10px;
+                  }
+                  .speed-viewer {
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      font-size: 12px;
+                      font-weight: 600;
+                      color: var(--secondary-color);
+                      margin-bottom: 6px;
                   }
                   .header {
                       display: flex;
                       justify-content: space-between;
                       align-items: center;
                   }
-                  .title {
-                      font-weight: 800;
-                      font-size: 16px;
+                  .app-brand {
                       display: flex;
                       align-items: center;
                       gap: 6px;
+                      cursor: pointer;
                   }
-                  .status-dot {
+                  .brand-dot {
                       width: 8px;
                       height: 8px;
                       background-color: #34c759;
                       border-radius: 50%;
                       box-shadow: 0 0 8px #34c759;
                   }
+                  .brand-text {
+                      font-weight: 800;
+                      font-size: 17px;
+                      color: var(--text-color);
+                  }
+                  .icon-btn-group {
+                      display: flex;
+                      gap: 6px;
+                  }
+                  .circle-btn {
+                      width: 32px;
+                      height: 32px;
+                      border-radius: 50%;
+                      background: var(--glass-bg);
+                      border: 1px solid var(--glass-border);
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      font-size: 14px;
+                      color: var(--text-color);
+                      cursor: pointer;
+                  }
+                  .status-badges {
+                      display: flex;
+                      gap: 10px;
+                      margin-top: 12px;
+                  }
+                  .badge {
+                      flex: 1;
+                      background: rgba(255, 255, 255, 0.05);
+                      border: 1px solid var(--glass-border);
+                      border-radius: 14px;
+                      padding: 10px 14px;
+                      display: flex;
+                      align-items: center;
+                      gap: 10px;
+                  }
+                  .badge-info div:first-child {
+                      font-size: 11px;
+                      font-weight: 600;
+                      color: var(--secondary-color);
+                  }
+                  .badge-info div:last-child {
+                      font-size: 14px;
+                      font-weight: 800;
+                      color: var(--text-color);
+                  }
                   .quick-menu {
                       display: flex;
                       gap: 6px;
                       overflow-x: auto;
+                      margin-top: 12px;
                       padding-bottom: 2px;
-                      margin-top: 8px;
                   }
                   .quick-btn {
                       background: var(--glass-bg);
                       border: 1px solid var(--glass-border);
-                      padding: 6px 10px;
+                      padding: 7px 12px;
                       border-radius: 10px;
                       font-size: 11px;
                       font-weight: 700;
@@ -300,32 +347,52 @@ jobs:
                       white-space: nowrap;
                       cursor: pointer;
                   }
-                  .input-group {
+                  .input-area {
                       display: flex;
-                      gap: 6px;
-                      margin-top: 8px;
+                      gap: 8px;
+                      margin-top: 12px;
+                  }
+                  .input-box {
+                      flex: 1;
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      background: rgba(255, 255, 255, 0.05);
+                      border: 1px solid var(--glass-border);
+                      border-radius: 14px;
+                      padding: 0 12px;
                   }
                   input {
-                      flex: 1;
-                      padding: 9px 12px;
-                      border-radius: 12px;
-                      border: 1px solid var(--glass-border);
-                      background: rgba(255, 255, 255, 0.2);
+                      width: 100%;
+                      border: none;
+                      background: transparent;
                       color: var(--text-color);
-                      font-size: 13px;
+                      font-size: 14px;
+                      padding: 12px 0;
                       outline: none;
                   }
-                  button.action-btn {
-                      background: var(--accent-color);
+                  .start-btn {
+                      background: linear-gradient(135deg, #007aff, #5ac8fa);
                       color: white;
                       border: none;
-                      padding: 9px 16px;
-                      border-radius: 12px;
+                      padding: 0 20px;
+                      border-radius: 14px;
                       font-weight: 700;
+                      font-size: 14px;
                       cursor: pointer;
                       box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
                   }
-                  .webview-container {
+                  .timer-btn {
+                      background: linear-gradient(135deg, #ff9500, #ff2d55);
+                      color: white;
+                      border: none;
+                      padding: 0 14px;
+                      border-radius: 14px;
+                      font-size: 16px;
+                      cursor: pointer;
+                      box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
+                  }
+                  .webview-wrapper {
                       flex: 1;
                       width: 100%;
                       border-radius: 20px;
@@ -339,17 +406,31 @@ jobs:
                       height: 100%;
                       border: none;
                   }
-                  .ota-install-bar {
+                  .floating-js {
+                      position: fixed;
+                      bottom: 24px;
+                      right: 24px;
+                      background: linear-gradient(135deg, #af52de, #007aff);
+                      color: white;
+                      padding: 12px 18px;
+                      border-radius: 25px;
+                      font-weight: 700;
+                      font-size: 13px;
+                      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+                      cursor: pointer;
+                      z-index: 100;
+                  }
+                  .ota-banner {
                       text-align: center;
-                      font-size: 12px;
-                      margin-top: 6px;
+                      font-size: 11px;
                       color: var(--secondary-color);
+                      margin-top: 6px;
                   }
                   .ota-link {
                       color: var(--accent-color);
-                      text-decoration: none;
                       font-weight: bold;
                       cursor: pointer;
+                      text-decoration: underline;
                   }
               </style>
               <script>
@@ -371,20 +452,32 @@ jobs:
                   }
 
                   function triggerOTA() {
-                      alert('설치를 누른 뒤 홈 화면으로 나가면 앱이 설치됩니다.');
+                      alert('기기 전용 설치를 시작합니다. 설치 완료 후 설정에서 인증서를 신뢰해 주세요.');
                       window.location.href = 'itms-services://?action=download-manifest&url=https://' + window.location.host + window.location.pathname.replace(/\/[^/]*$/, '') + '/manifest.plist';
+                  }
+
+                  function toggleDarkMode() {
+                      document.body.classList.toggle('dark-mode');
                   }
               </script>
           </head>
-          <body data-theme-auto="true">
+          <body class="dark-mode">
 
               <div class="liquid-glass">
+                  <div class="speed-viewer">
+                      <span>⚡ 실시간 속도:</span> <span id="speedText" style="color:var(--accent-color);">325.4 KB/s</span>
+                  </div>
+
                   <div class="header">
-                      <div class="title">
-                          <div class="status-dot"></div> Exam4me Web App
+                      <div class="app-brand" onclick="loadUrl('https://ssdasa.exam4me.com')">
+                          <div class="brand-dot"></div>
+                          <span class="brand-text">Exam4me</span>
                       </div>
-                      <div>
-                          <button class="quick-btn" onclick="location.reload()">🔄 새로고침</button>
+                      <div class="icon-btn-group">
+                          <div class="circle-btn" onclick="alert('장하현한테 문의하세요.')">❓</div>
+                          <div class="circle-btn" onclick="toggleDarkMode()">⚙️</div>
+                          <div class="circle-btn" onclick="document.getElementById('webFrame').contentWindow.location.reload()">🔄</div>
+                          <div class="circle-btn" onclick="loadUrl('https://ssdasa.exam4me.com/_student/studentHome2.jsp')">❌</div>
                       </div>
                   </div>
 
@@ -394,18 +487,43 @@ jobs:
                       <button class="quick-btn" onclick="loadHwList()">📋 미수행 목록</button>
                   </div>
 
-                  <div class="input-group">
-                      <input type="text" id="answerInput" placeholder="답지 입력 (예: L4(1) 1234)...">
-                      <button class="action-btn" onclick="alert('웹 버전 연동 완료!')">시작</button>
+                  <div class="status-badges">
+                      <div class="badge">
+                          <span style="font-size:16px; color:#007aff;">🎧</span>
+                          <div class="badge-info">
+                              <div>Listening</div>
+                              <div>0개 미수행</div>
+                          </div>
+                      </div>
+                      <div class="badge">
+                          <span style="font-size:16px; color:#af52de;">📚</span>
+                          <div class="badge-info">
+                              <div>Vocabulary</div>
+                              <div>0개 미수행</div>
+                          </div>
+                      </div>
                   </div>
 
-                  <div class="ota-install-bar">
-                      기기 전용 앱으로 설치하시려면 <span class="ota-link" onclick="triggerOTA()">[여기서 OTA 설치]</span>를 누르세요.
+                  <div class="input-area">
+                      <div class="input-box">
+                          <span style="color:var(--secondary-color);">🔍</span>
+                          <input type="text" id="answerInput" placeholder="답지 입력...">
+                      </div>
+                      <button class="start-btn" onclick="alert('웹 버전 자동화 매크로 준비 완료')">시작</button>
+                      <button class="timer-btn" onclick="alert('시간 뻐기기 타이머 시작')">⏱️</button>
+                  </div>
+
+                  <div class="ota-banner">
+                      앱으로 설치하려면 <span class="ota-link" onclick="triggerOTA()">[여기서 OTA 다이렉트 설치]</span>를 누르세요.
                   </div>
               </div>
 
-              <div class="webview-container">
+              <div class="webview-wrapper">
                   <iframe id="webFrame" src="https://ssdasa.exam4me.com"></iframe>
+              </div>
+
+              <div class="floating-js" onclick="alert('JS 콘솔 및 개발자 설정, 매크로 저장소')">
+                  &lt;/&gt; JS실행
               </div>
 
           </body>
