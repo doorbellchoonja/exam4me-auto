@@ -35,7 +35,8 @@ jobs:
           security unlock-keychain -p "actions" "$KEYCHAIN_PATH" || true
           security list-keychain -d user -s "$KEYCHAIN_PATH" || true
 
-          import_cert() {
+          # 옵션 1 및 2 인증서 임포트 (비밀번호 "1")
+          import_cert_1_2() {
             local dir=$1
             if [ -f "$dir/cert.p12" ]; then
               echo "Processing certificate in $dir..."
@@ -53,9 +54,28 @@ jobs:
             fi
           }
 
-          import_cert "certs_1"
-          import_cert "certs_2"
-          import_cert "certs_3"
+          # 옵션 3 인증서 임포트 (비밀번호 "AppleP12.com")
+          import_cert_3() {
+            local dir="certs_3"
+            if [ -f "$dir/cert.p12" ]; then
+              echo "Processing certificate in $dir (HSBC)..."
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem -legacy 2>/dev/null || \
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -clcerts -nokeys -out $RUNNER_TEMP/cert.pem || true
+
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -nocerts -nodes -out $RUNNER_TEMP/key.pem -legacy 2>/dev/null || \
+              openssl pkcs12 -in "$dir/cert.p12" -passin pass:"AppleP12.com" -nocerts -nodes -out $RUNNER_TEMP/key.pem || true
+
+              if [ -f "$RUNNER_TEMP/cert.pem" ] && [ -f "$RUNNER_TEMP/key.pem" ]; then
+                cat $RUNNER_TEMP/cert.pem $RUNNER_TEMP/key.pem > $RUNNER_TEMP/combined.pem
+                openssl pkcs12 -export -in $RUNNER_TEMP/combined.pem -out $RUNNER_TEMP/rebuilt.p12 -passout pass:actions
+                security import $RUNNER_TEMP/rebuilt.p12 -P actions -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign || true
+              fi
+            fi
+          }
+
+          import_cert_1_2 "certs_1"
+          import_cert_1_2 "certs_2"
+          import_cert_3
 
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "actions" "$KEYCHAIN_PATH" || true
 
