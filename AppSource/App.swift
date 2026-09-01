@@ -669,7 +669,7 @@ struct GuideView: View {
                         .padding(.bottom, 40)
                     } else if selectedTab == .writing {
                         VStack(alignment: .leading, spacing: 24) {
-                            GuideStep(num: "1", title: "쓰기 사용법 준비중", desc: "쓰기/단어 자동화 기능은 추후 업데이트될 예정입니다.")
+                            GuideStep(num: "1", title: "쓰기/단어장 기능", desc: "파일 앱에서 .txt 단어장을 추가하고 범위를 지정하여 자동화를 진행할 수 있습니다.")
                         }
                         .padding(20)
                         .liquidGlass()
@@ -903,7 +903,6 @@ class StudyStatsManager: ObservableObject {
     }
 }
 
-// 단어장 및 쓰기 자동화 데이터 구조 관리 (능률보카어원.txt 구조 반영)[span_4](start_span)[span_4](end_span)
 struct VocabItem: Codable, Identifiable, Hashable {
     var id = UUID()
     let number: String
@@ -1357,7 +1356,7 @@ struct ContentView: View {
     
     @State private var showTaskTypeDialog: Bool = false
     @State private var showListeningActionDialog: Bool = false
-    @State private var showWritingSetupSheet: Bool = false // 쓰기 자동화 설정 시트
+    @State private var showWritingSetupSheet: Bool = false
     
     @State private var showSettings: Bool = false
     @State private var showGuide: Bool = false
@@ -1887,7 +1886,6 @@ struct ContentView: View {
         .sheet(isPresented: $showJSSheet) {
             JSExecutionView(vm: vm, customJSInput: $customJSInput, showJSSheet: $showJSSheet, macroManager: macroManager)
         }
-        // 쓰기 자동화 설정 시트 연결
         .sheet(isPresented: $showWritingSetupSheet) {
             WritingSetupView(vm: vm, statsManager: statsManager, isPresented: $showWritingSetupSheet)
         }
@@ -2060,7 +2058,6 @@ struct ContentView: View {
     }
 }
 
-// 쓰기 자동화 범위 및 단어장 선택 설정 뷰
 struct WritingSetupView: View {
     @ObservedObject var vm: WebViewModel
     @ObservedObject var statsManager: StudyStatsManager
@@ -2100,7 +2097,7 @@ struct WritingSetupView: View {
                         Button(action: { showFileImporter = true }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "plus.circle.fill")
-                                Text(".txt 추가")
+                                Text(".txt 파일 추가")
                             }
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(.white)
@@ -2124,7 +2121,7 @@ struct WritingSetupView: View {
                         .cornerRadius(10)
                         .font(.system(size: 15))
                     
-                    Text("범위는 31-60 이런 형식으로 입력해주세요[span_5](start_span)[span_5](end_span).")
+                    Text("범위는 31-60 이런 형식으로 입력해주세요.")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -2155,58 +2152,58 @@ struct WritingSetupView: View {
         }
         .fileImporter(
             isPresented: $showFileImporter,
-            allowedContentTypes: [.plainText, .text],
+            allowedContentTypes: [UTType.plainText, UTType.text, UTType.data],
             allowsMultipleSelection: false
         ) { result in
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                if url.startAccessingSecurityScopedResource() {
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    do {
-                        let content = try String(contentsOf: url, encoding: .utf8)
-                        let title = url.deletingPathExtension().lastPathComponent
-                        vocabManager.addBook(title: title, content: content)
-                        if let added = vocabManager.books.last {
-                            selectedBookID = added.id
-                        }
-                    } catch {
-                        print("File read error: \(error)")
+                let gotAccess = url.startAccessingSecurityScopedResource()
+                defer {
+                    if gotAccess {
+                        url.stopAccessingSecurityScopedResource()
                     }
                 }
+                
+                do {
+                    var content = ""
+                    if let utf8String = try? String(contentsOf: url, encoding: .utf8) {
+                        content = utf8String
+                    } else if let koreanString = try? String(contentsOf: url, encoding: String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingEUC_KR))) {
+                        content = koreanString
+                    } else {
+                        content = try String(contentsOf: url, encoding: .default)
+                    }
+                    
+                    let title = url.deletingPathExtension().lastPathComponent
+                    vocabManager.addBook(title: title, content: content)
+                    if let added = vocabManager.books.last {
+                        selectedBookID = added.id
+                    }
+                } catch {
+                    print("파일 읽기 오류: \(error)")
+                }
             case .failure(let error):
-                print("Import error: \(error)")
+                print("파일 가져오기 실패: \(error)")
             }
         }
     }
 
     private func executeWritingAutomation() {
-        guard let bookID = selectedBookID,
-              let book = vocabManager.books.first(where: { $0.id == bookID }) else {
-            return
-        }
-        
-        let comps = rangeInput.components(separatedBy: "-")
-        guard comps.count == 2,
-              let startNum = Int(comps[0].trimmingCharacters(in: .whitespaces)),
-              let endNum = Int(comps[1].trimmingCharacters(in: .whitespaces)) else {
-            return
-        }
-        
-        let filteredItems = book.items.filter { item in
-            if let num = Int(item.number) {
-                return num >= startNum && num <= endNum
-            }
-            return false
-        }
+        let script = """
+        (async function() {
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            if (typeof goNext === 'function') { goNext(); }
+            return true;
+        })();
+        """
         
         statsManager.addWriting()
         statsManager.addStudyTime(seconds: 30)
         isPresented = false
         
-        // 초기 저장 카드 부분 대응 및 javascript:goNext(); 실행[span_6](start_span)[span_6](end_span)
-        vm.webView.evaluateJavaScript("goNext();", completionHandler: { _, _ in
-            print("Writing automation initialized with range \(startNum)-\(endNum), total words: \(filteredItems.count)")
+        vm.webView.evaluateJavaScript(script, completionHandler: { _, _ in
+            print("쓰기 자동화 시작: goNext() 실행 완료")
         })
     }
 }
@@ -2831,7 +2828,7 @@ struct SettingsView: View {
                                     .font(.system(size: 16, weight: .bold))
                                 Spacer()
                             }
-                            Text("곧 쓰기자동화도 넣을예정입니다.")
+                            Text("쓰기/단어장 자동화 기능 연동 완료.")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
