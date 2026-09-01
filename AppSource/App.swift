@@ -2121,7 +2121,7 @@ struct WritingSetupView: View {
                         .cornerRadius(10)
                         .font(.system(size: 15))
                     
-                    Text("범위는 31-60 이런 형식으로 입력해주세요.")
+                    Text("범위는 31-60 이런 형식으로 입력해주세요[span_0](start_span)[span_0](end_span).")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -2169,8 +2169,8 @@ struct WritingSetupView: View {
                     var content = ""
                     if let utf8String = try? String(contentsOf: url, encoding: .utf8) {
                         content = utf8String
-                    } else if let koreanString = try? String(contentsOf: url, encoding: String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingEUC_KR))) {
-                        content = koreanString
+                    } else if let cp949String = try? String(contentsOf: url, encoding: .init(rawValue: 0x80000422)) {
+                        content = cp949String
                     } else {
                         content = try String(contentsOf: url, encoding: .default)
                     }
@@ -2193,6 +2193,15 @@ struct WritingSetupView: View {
         let script = """
         (async function() {
             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            var event = new MouseEvent('click', {
+                view: window,
+                bubbles: true,
+                cancelable: true,
+                clientX: 10,
+                clientY: 10
+            });
+            document.body.dispatchEvent(event);
+            await sleep(50);
             if (typeof goNext === 'function') { goNext(); }
             return true;
         })();
@@ -2203,7 +2212,7 @@ struct WritingSetupView: View {
         isPresented = false
         
         vm.webView.evaluateJavaScript(script, completionHandler: { _, _ in
-            print("쓰기 자동화 시작: goNext() 실행 완료")
+            print("쓰기 자동화 시작: 외부 배경 클릭 및 goNext() 실행 완료[span_1](start_span)[span_1](end_span)")
         })
     }
 }
